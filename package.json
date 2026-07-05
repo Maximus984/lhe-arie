@@ -1,0 +1,36 @@
+{
+  "name": "maxx-forge-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:next": "npm run --prefix \"lhe-aries:\" build",
+    "deploy": "firebase deploy"
+  },
+  "dependencies": {
+    "@react-three/drei": "9.122",
+    "@react-three/fiber": "8.17",
+    "@tailwindcss/vite": "^4.3.2",
+    "date-fns": "^4.4.0",
+    "framer-motion": "^12.42.2",
+    "gsap": "^3.15.0",
+    "lucide-react": "^1.23.0",
+    "react": "^18.3.1",
+    "react-calendar": "^6.0.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.18.1",
+    "three": "^0.169.0",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.5.2",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
+    "vite": "^5.4.2"
+  }
+}

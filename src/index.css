@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian-void: #050508;
+  --color-obsidian-surface: #0a0a0f;
+  --color-obsidian-card: rgba(13, 13, 18, 0.75);
+  
+  --color-moss-green: #10B981;
+  --color-moss-green-dark: #065F46;
+  --color-cyber-blue: #00E5FF;
+  --color-cyber-blue-dark: #005662;
+  
+  --color-paper-white: #F3F4F6;
+  --color-paper-white-muted: rgba(243, 244, 246, 0.6);
+  --color-paper-white-dim: rgba(243, 244, 246, 0.2);
+
+  --font-display: "Outfit", "Inter", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+  
+  --animate-pulse-slow: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-scanline: scanline 8s linear infinite;
+  --animate-ink-bleed: ink-bleed 2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.15); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes ink-bleed {
+  0% {
+    filter: blur(12px) contrast(5);
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    filter: blur(0px) contrast(1);
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* =====================================================
+   GLOBAL INK WABI-SABI & GLASS UTILITIES
+   ===================================================== */
+
+html {
+  scroll-behavior: smooth;
+  background-color: #050508;
+  color: #F3F4F6;
+}
+
+body {
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glassmorphic Panel styling */
+.glass-panel {
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-heavy {
+  background: rgba(8, 8, 12, 0.9);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-dock {
+  background: rgba(13, 13, 18, 0.65);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 10px 40px -10px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Japanese Wabi-Sabi Grid Overlay */
+.wabi-sabi-paper {
+  position: relative;
+  background-color: #050508;
+}
+
+.wabi-sabi-paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.015;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  z-index: 1;
+}
+
+/* Cybernetic Dot Matrix Grid */
+.cyber-grid-dots {
+  background-size: 32px 32px;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050508;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-moss-green);
+}
+
+/* Soundwave Waveform Bar Animation */
+.bar-animation {
+  animation: bounce 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes bounce {
+  10% { transform: scaleY(0.3); }
+  30% { transform: scaleY(1.0); }
+  60% { transform: scaleY(0.5); }
+  80% { transform: scaleY(0.8); }
+  100% { transform: scaleY(0.2); }
+}
+
+/* Custom glow filters */
+.glow-moss {
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.15);
+}
+
+.glow-blue {
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.15);
+}
+
+.text-glow-blue {
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+.text-glow-moss {
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}

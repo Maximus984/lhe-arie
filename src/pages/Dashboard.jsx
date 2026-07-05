@@ -1,0 +1,2154 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
+import DynamicIsland from '../components/DynamicIsland.jsx';
+import AIChatSystem from '../components/AIChatSystem.jsx';
+import FormsCenter from '../components/FormsCenter.jsx';
+import CalendarPanel from '../components/CalendarPanel.jsx';
+import { 
+  Play, 
+  Pause, 
+  SkipForward, 
+  SkipBack, 
+  Volume2, 
+  VolumeX, 
+  Home, 
+  Disc, 
+  Zap, 
+  Cpu, 
+  Gamepad2, 
+  User, 
+  Copy, 
+  Check, 
+  Send, 
+  Terminal, 
+  Heart, 
+  X, 
+  ExternalLink, 
+  Sliders, 
+  Flame, 
+  ChevronRight,
+  Sparkles,
+  Link,
+  Laptop
+} from 'lucide-react';
+
+// Actual physical audio files from public directory
+const PLAYLIST = [
+  {
+    id: 1,
+    title: 'Adrenaline Rush',
+    artist: 'Maxx Forge',
+    src: '/audio/album_dj_em/Adrenaline Rush.mp3',
+    duration: '4:03'
+  },
+  {
+    id: 2,
+    title: 'Applied Physics',
+    artist: 'Maxx Forge',
+    src: '/audio/album_dj_em/Applied Physics.mp3',
+    duration: '3:48'
+  },
+  {
+    id: 3,
+    title: 'Dark Queen',
+    artist: 'Maxx Forge',
+    src: '/audio/album_dj_em/Dark Queen.mp3',
+    duration: '4:58'
+  },
+  {
+    id: 4,
+    title: 'Electric Whisper',
+    artist: 'Maxx Forge',
+    src: '/audio/album_dj_em/Electric Whisper.mp3',
+    duration: '4:07'
+  },
+  {
+    id: 5,
+    title: 'Shadow Dance',
+    artist: 'audio/album_dj_em/Shadow Dance (1).mp3', // checking fallback formatting
+    duration: '4:37'
+  },
+  {
+    id: 6,
+    title: 'Off The Record',
+    artist: 'Maxx Forge',
+    src: '/audio/album_dj_em/Off_the_Record_20260121_1331.mp3',
+    duration: '5:23'
+  },
+  {
+    id: 7,
+    title: 'User Error',
+    artist: 'Maxx Forge',
+    src: '/audio/album_dj_em/USER_ERROR_20260121_1228.mp3',
+    duration: '3:39'
+  }
+];
+
+// Clean path alignment helper
+PLAYLIST[4].src = '/audio/album_dj_em/Shadow Dance (1).mp3';
+
+export default function App() {
+  const { currentUser, can } = useAuth();
+  const [activeSection, setActiveSection] = useState('matrix'); // matrix, records, djem, aries, gamedev
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [favorites, setFavorites] = useState([2]); // Holds indices of tracks marked as favorite
+  const [formsOpen, setFormsOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  
+  // Audio Player State
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.85);
+  const [isMuted, setIsMuted] = useState(false);
+
+  const audioRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  const currentTrack = PLAYLIST[currentTrackIndex];
+
+  // =====================================================
+  // AUDIO CONTROLS EFFECT
+  // =====================================================
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.load();
+      if (isPlaying) {
+        audioRef.current.play()
+          .catch(() => setIsPlaying(false));
+      }
+    }
+  }, [currentTrackIndex]);
+
+  const handlePlayPause = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => console.warn("Playback interrupted:", err));
+    }
+  };
+
+  const handleSkipForward = () => {
+    setCurrentTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
+  };
+
+  const handleSkipBackward = () => {
+    setCurrentTrackIndex((prev) => (prev - 1 + PLAYLIST.length) % PLAYLIST.length);
+  };
+
+  const handleAudioTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleAudioLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration || 0);
+    }
+  };
+
+  const handleAudioEnded = () => {
+    handleSkipForward();
+  };
+
+  const handleScrubChange = (e) => {
+    const time = parseFloat(e.target.value);
+    setCurrentTime(time);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
+  };
+
+  const toggleFavorite = (trackId) => {
+    if (favorites.includes(trackId)) {
+      setFavorites(favorites.filter(id => id !== trackId));
+    } else {
+      setFavorites([...favorites, trackId]);
+    }
+  };
+
+  const formatTime = (timeInSeconds) => {
+    if (isNaN(timeInSeconds)) return '0:00';
+    const mins = Math.floor(timeInSeconds / 60);
+    const secs = Math.floor(timeInSeconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // =====================================================
+  // DYNAMIC CANVAS BACKGROUND SYSTEM
+  // =====================================================
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
+
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Particle Classes depending on Active Section
+    class Particle {
+      constructor() {
+        this.reset();
+      }
+
+      reset() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 0.35;
+        this.vy = (Math.random() - 0.5) * 0.35;
+        this.size = Math.random() * 2 + 1;
+        this.color = 'rgba(16, 185, 129, 0.25)'; // Moss Green default
+        this.life = Math.random() * 200 + 100;
+        this.maxLife = this.life;
+      }
+
+      update(mode) {
+        if (mode === 'matrix') {
+          // Floating bio cells
+          this.y -= 0.15;
+          this.x += Math.sin(this.y / 30) * 0.1;
+          this.color = `rgba(16, 185, 129, ${0.1 + (this.life / this.maxLife) * 0.15})`;
+        } else if (mode === 'records') {
+          // Circular orbits or sound ripples
+          const dx = this.x - width / 2;
+          const dy = this.y - height / 2;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
+          
+          this.x = width / 2 + Math.cos(angle + 0.002) * (dist - 0.2);
+          this.y = height / 2 + Math.sin(angle + 0.002) * (dist - 0.2);
+          this.color = `rgba(0, 229, 255, ${0.08 + Math.random() * 0.05})`;
+          if (dist < 40) this.reset();
+        } else if (mode === 'djem') {
+          // Sound reactive grid sweep
+          this.x += this.vx * 3;
+          this.y += this.vy * 3;
+          this.color = `rgba(16, 185, 129, 0.3)`;
+        } else if (mode === 'aries') {
+          // Connection vertices
+          this.x += this.vx * 0.8;
+          this.y += this.vy * 0.8;
+          this.color = 'rgba(0, 229, 255, 0.25)';
+        } else if (mode === 'gamedev') {
+          // Ash embers floating up
+          this.y -= Math.random() * 0.8 + 0.2;
+          this.x += (Math.random() - 0.5) * 0.4;
+          this.color = `rgba(239, 68, 68, ${0.1 + (this.life / this.maxLife) * 0.35})`;
+        }
+
+        this.life--;
+        if (this.life <= 0 || this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
+          this.reset();
+          if (mode === 'gamedev') {
+            this.y = height + 10; // Start at bottom for embers
+          }
+        }
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+      }
+    }
+
+    const particles = Array.from({ length: 90 }, () => new Particle());
+
+    // Laser sweeps for DJ Em
+    let laserAngle = 0;
+    
+    // Ripple array for Music Division
+    let ripples = [];
+
+    const drawGridLines = (color, opacity) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.5;
+      
+      // Vertical lines
+      const step = 40;
+      for (let x = 0; x < width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      
+      // Horizontal lines
+      for (let y = 0; y < height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+    };
+
+    const render = () => {
+      // Background clear
+      ctx.fillStyle = '#050508';
+      ctx.fillRect(0, 0, width, height);
+
+      // Render mode styles
+      if (activeSection === 'matrix') {
+        // Slow ambient gradient
+        const grad = ctx.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, Math.max(width, height));
+        grad.addColorStop(0, '#0a1a12'); // moss green tint
+        grad.addColorStop(1, '#050508');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+      } 
+      else if (activeSection === 'records') {
+        // Core music visualization ring
+        ctx.beginPath();
+        ctx.arc(width / 2, height / 2, 160, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.04)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Pulsing active concentric circles
+        if (isPlaying && Math.random() < 0.08) {
+          ripples.push({ r: 160, maxR: Math.max(width, height) * 0.7, opacity: 0.4 });
+        }
+        
+        ripples.forEach((rip, idx) => {
+          rip.r += 2.5;
+          rip.opacity -= 0.005;
+          ctx.beginPath();
+          ctx.arc(width / 2, height / 2, rip.r, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(0, 229, 255, ${rip.opacity})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        });
+        ripples = ripples.filter(rip => rip.opacity > 0);
+      } 
+      else if (activeSection === 'djem') {
+        // Grid overlay
+        ctx.fillStyle = 'rgba(10, 10, 15, 0.5)';
+        ctx.fillRect(0, 0, width, height);
+        drawGridLines('rgba(16, 185, 129, 0.015)', 0.015);
+
+        // Laser Simulation
+        laserAngle += 0.005;
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.12)';
+        ctx.lineWidth = 1.5;
+        
+        const centerX = width / 2;
+        const startY = 0;
+        
+        // Sweep left laser
+        ctx.beginPath();
+        ctx.moveTo(centerX - 300, startY);
+        ctx.lineTo(centerX - 300 + Math.sin(laserAngle) * 400, height);
+        ctx.stroke();
+
+        // Sweep right laser
+        ctx.beginPath();
+        ctx.moveTo(centerX + 300, startY);
+        ctx.lineTo(centerX + 300 - Math.sin(laserAngle * 1.2) * 400, height);
+        ctx.stroke();
+      } 
+      else if (activeSection === 'aries') {
+        // Geometric node connections
+        particles.forEach((p, idx) => {
+          for (let j = idx + 1; j < particles.length; j++) {
+            const p2 = particles[j];
+            const dx = p.x - p2.x;
+            const dy = p.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 100) {
+              ctx.strokeStyle = `rgba(0, 229, 255, ${0.08 * (1 - dist / 100)})`;
+              ctx.lineWidth = 0.5;
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.stroke();
+            }
+          }
+        });
+      } 
+      else if (activeSection === 'gamedev') {
+        // Cinematic darkness vignette
+        const grad = ctx.createRadialGradient(width / 2, height / 2, 100, width / 2, height / 2, Math.max(width, height) * 0.8);
+        grad.addColorStop(0, 'transparent');
+        grad.addColorStop(1, '#020204');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      // Draw all general particles
+      particles.forEach(p => {
+        p.update(activeSection);
+        p.draw();
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [activeSection, isPlaying]);
+
+  return (
+    <div className="relative min-h-screen text-paper-white wabi-sabi-paper overflow-hidden flex flex-col font-sans selection:bg-moss-green/20 selection:text-paper-white">
+      {/* Dynamic Island Overlay */}
+      <DynamicIsland activeSection={activeSection} isPlaying={isPlaying} currentTrack={currentTrack} onNavigate={setActiveSection} />
+
+      {/* Hidden Audio Controller */}
+      <audio
+        ref={audioRef}
+        src={currentTrack.src}
+        onTimeUpdate={handleAudioTimeUpdate}
+        onLoadedMetadata={handleAudioLoadedMetadata}
+        onEnded={handleAudioEnded}
+      />
+
+      {/* Global Background Canvas */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none z-0"
+      />
+
+      {/* Header bar */}
+      <header className="relative z-10 w-full px-6 md:px-12 py-5 flex justify-between items-center bg-obsidian-void/40 backdrop-blur-md border-b border-white/5">
+        <button
+          onClick={() => setActiveSection('matrix')}
+          className="flex items-center gap-3 font-display font-extrabold tracking-widest text-lg md:text-xl text-paper-white hover:text-moss-green transition duration-300"
+          id="btn-nav-home"
+        >
+          <span className="w-2.5 h-2.5 rounded-full bg-moss-green shadow-[0_0_8px_#10B981]"></span>
+          MAXX FORGE STUDIO<span className="text-moss-green font-light">™</span>
+        </button>
+
+        <div className="flex items-center gap-4 sm:gap-6">
+          {/* Quick Track Status Info in Header */}
+          {isPlaying && (
+            <div 
+              onClick={() => setActiveSection('records')}
+              className="hidden lg:flex items-center gap-3 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 text-xs font-mono cursor-pointer hover:bg-white/10 transition"
+              id="btn-header-nowplaying"
+            >
+              <div className="flex items-center gap-1 w-4 h-3">
+                <span className="w-[2px] bg-cyber-blue h-full origin-bottom bar-animation"></span>
+                <span className="w-[2px] bg-cyber-blue h-2/3 origin-bottom bar-animation" style={{ animationDelay: '0.2s' }}></span>
+                <span className="w-[2px] bg-cyber-blue h-4/5 origin-bottom bar-animation" style={{ animationDelay: '0.4s' }}></span>
+              </div>
+              <span className="text-paper-white-muted">NOW PLAYING:</span>
+              <span className="text-cyber-blue font-bold truncate max-w-[120px]">{currentTrack.title}</span>
+            </div>
+          )}
+
+          {/* Platform Links & Modals */}
+          {can('view_admin') && (
+            <RouterLink to="/admin" className="px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-full text-xs font-mono font-bold hover:bg-indigo-500/20 transition">
+              Admin
+            </RouterLink>
+          )}
+
+          {can('view_staff_portal') && (
+            <RouterLink to="/staff" className="px-3.5 py-1.5 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full text-xs font-mono font-bold hover:bg-pink-500/20 transition">
+              Staff
+            </RouterLink>
+          )}
+
+          <button
+            onClick={() => setCalendarOpen(true)}
+            className="px-3.5 py-1.5 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-full text-xs font-mono font-bold hover:bg-cyan-500/20 transition"
+          >
+            Calendar
+          </button>
+
+          <button
+            onClick={() => setFormsOpen(true)}
+            className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs font-mono font-bold hover:bg-emerald-500/20 transition"
+          >
+            Forms
+          </button>
+
+          <button
+            onClick={() => setAccountOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-neutral-900/60 border border-white/10 rounded-full hover:border-moss-green hover:bg-neutral-900 transition duration-300 text-sm font-semibold text-paper-white-muted hover:text-paper-white shadow-lg"
+            id="btn-header-profile"
+          >
+            <User size={15} className="text-moss-green" />
+            <span className="hidden sm:inline">Forge Account</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Primary Display Portal */}
+      <main className="relative z-10 flex-grow w-full max-w-7xl mx-auto px-6 md:px-12 py-10 md:py-16 flex flex-col justify-center pb-28">
+        <AnimatePresence mode="wait">
+          {activeSection === 'matrix' && (
+            <motion.div
+              key="matrix"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col gap-10 md:gap-14 animate-ink-bleed"
+            >
+              {/* Brand Statement Banner */}
+              <div className="max-w-3xl flex flex-col gap-4 mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 text-[9px] font-mono tracking-widest bg-moss-green/10 border border-moss-green/30 text-moss-green rounded uppercase font-bold">
+                    System Core v2.0
+                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>
+                  <span className="text-xs font-mono text-paper-white-muted uppercase tracking-wider">Obsidian Forge Architecture</span>
+                </div>
+                <h1 className="text-4xl sm:text-6xl md:text-7xl font-display font-black tracking-tighter leading-none">
+                  THE MATRIX <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-moss-green to-cyber-blue">ECOSYSTEM.</span>
+                </h1>
+                <p className="text-base md:text-lg text-paper-white-muted font-light leading-relaxed max-w-xl">
+                  Welcome to the centralized digital matrix of Maxx Forge Studio. Discover, interact, and automate across our interconnected nodes of music synthesis, lighting design, software tools, and gaming systems.
+                </p>
+              </div>
+
+              {/* Portal Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Portal 1: Records */}
+                <div 
+                  onClick={() => setActiveSection('records')}
+                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-cyber-blue hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
+                  id="portal-records"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-cyber-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 bg-cyber-blue/10 border border-cyber-blue/20 rounded-xl text-cyber-blue group-hover:scale-110 transition duration-300">
+                      <Disc size={20} className="animate-spin-slow" />
+                    </div>
+                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 01</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-display font-bold group-hover:text-cyber-blue transition duration-300 mb-2">Prime Records</h3>
+                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
+                      Sleek music visualizer and digital dashboard featuring the 2026 track archives.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Portal 2: DJ Em */}
+                <div 
+                  onClick={() => setActiveSection('djem')}
+                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-moss-green hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
+                  id="portal-djem"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-moss-green/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 bg-moss-green/10 border border-moss-green/20 rounded-xl text-moss-green group-hover:scale-110 transition duration-300">
+                      <Zap size={20} />
+                    </div>
+                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 02</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-display font-bold group-hover:text-moss-green transition duration-300 mb-2">DJ Em Live Events</h3>
+                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
+                      Dynamic stage light rig mixers, DMX controller simulations, and event booking.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Portal 3: Aries Tech */}
+                <div 
+                  onClick={() => setActiveSection('aries')}
+                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-cyber-blue hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
+                  id="portal-aries"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-cyber-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 bg-cyber-blue/10 border border-cyber-blue/20 rounded-xl text-cyber-blue group-hover:scale-110 transition duration-300">
+                      <Cpu size={20} />
+                    </div>
+                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 03</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-display font-bold group-hover:text-cyber-blue transition duration-300 mb-2">Aries AI & Software</h3>
+                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
+                      Local Ollama LLM terminal consoles and the September 2026 rollout node.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Portal 4: Game Dev */}
+                <div 
+                  onClick={() => setActiveSection('gamedev')}
+                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-red-500 hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
+                  id="portal-gamedev"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                  <div className="flex justify-between items-start">
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 group-hover:scale-110 transition duration-300">
+                      <Gamepad2 size={20} />
+                    </div>
+                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 04</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-display font-bold group-hover:text-red-500 transition duration-300 mb-2">Game Development</h3>
+                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
+                      Survival horror cinematic visuals, media grids, and interactive demo runs.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeSection === 'records' && (
+            <motion.div
+              key="records"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10"
+            >
+              {/* Music Player Panel */}
+              <div className="lg:col-span-7 glass-panel rounded-3xl p-6 md:p-8 flex flex-col gap-6 glow-blue">
+                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <Disc className={`text-cyber-blue ${isPlaying ? 'animate-spin' : ''}`} size={20} style={{ animationDuration: '4s' }} />
+                    <span className="text-sm font-display font-bold tracking-wider uppercase text-cyber-blue">Prime Records Suite</span>
+                  </div>
+                  <span className="px-2.5 py-1 rounded bg-cyber-blue/10 border border-cyber-blue/20 text-[9px] font-mono text-cyber-blue font-bold">
+                    AUDIO MASTER STREAM
+                  </span>
+                </div>
+
+                <div className="flex flex-col md:flex-row items-center gap-8 py-4">
+                  {/* CD Cover Mockup */}
+                  <div className="relative group w-44 h-44 flex-shrink-0">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-cyber-blue/20 to-moss-green/20 rounded-full blur-xl group-hover:scale-110 transition duration-500" />
+                    <div className="relative w-full h-full bg-neutral-900 border-2 border-white/10 rounded-full flex items-center justify-center shadow-2xl overflow-hidden">
+                      {/* CD Center Ring */}
+                      <div className="w-12 h-12 bg-[#050508] border border-white/20 rounded-full flex items-center justify-center z-10">
+                        <div className="w-4 h-4 bg-cyber-blue/30 rounded-full"></div>
+                      </div>
+                      
+                      {/* Grooves */}
+                      <div className="absolute inset-4 border border-white/5 rounded-full"></div>
+                      <div className="absolute inset-8 border border-white/5 rounded-full"></div>
+                      <div className="absolute inset-12 border border-white/5 rounded-full"></div>
+                      <div className="absolute inset-16 border border-white/5 rounded-full"></div>
+
+                      {/* Rotating Vinyl Overlay */}
+                      <div className={`absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-neutral-800/80 via-neutral-950 to-neutral-950 flex flex-col justify-end items-center p-3 pb-6 text-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '8s' }}>
+                        <span className="text-[10px] font-mono text-white/40 truncate w-32 font-bold uppercase tracking-wider">{currentTrack.artist}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-grow flex flex-col gap-4 text-center md:text-left">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-display font-bold text-paper-white tracking-tight">{currentTrack.title}</h2>
+                      <span className="text-sm font-mono text-cyber-blue/80 font-semibold">{currentTrack.artist}</span>
+                    </div>
+
+                    <div className="flex items-center justify-center md:justify-start gap-4">
+                      <button 
+                        onClick={() => toggleFavorite(currentTrack.id)}
+                        className={`p-2.5 rounded-full border transition duration-300 ${favorites.includes(currentTrack.id) ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-white/5 border-white/10 text-paper-white-muted hover:border-red-500/50 hover:text-red-500'}`}
+                        title="Add to Favorites"
+                        id="btn-audio-fav"
+                      >
+                        <Heart size={16} fill={favorites.includes(currentTrack.id) ? "currentColor" : "none"} />
+                      </button>
+                      <span className="text-xs font-mono text-paper-white-dim">ID: MFC-{currentTrack.id.toString().padStart(3, '0')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar controller */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between text-xs font-mono text-paper-white-muted">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 100}
+                    value={currentTime}
+                    onChange={handleScrubChange}
+                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyber-blue"
+                    id="slider-audio-progress"
+                  />
+                </div>
+
+                {/* Player button row */}
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleSkipBackward}
+                      className="p-3 bg-neutral-950/40 border border-white/5 rounded-xl hover:bg-neutral-900 hover:text-cyber-blue transition duration-300"
+                      title="Previous Track"
+                      id="btn-audio-prev"
+                    >
+                      <SkipBack size={18} />
+                    </button>
+                    <button
+                      onClick={handlePlayPause}
+                      className="p-4 bg-cyber-blue text-neutral-950 rounded-xl hover:bg-cyan-300 transition duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+                      title={isPlaying ? "Pause" : "Play"}
+                      id="btn-audio-play"
+                    >
+                      {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+                    </button>
+                    <button
+                      onClick={handleSkipForward}
+                      className="p-3 bg-neutral-950/40 border border-white/5 rounded-xl hover:bg-neutral-900 hover:text-cyber-blue transition duration-300"
+                      title="Next Track"
+                      id="btn-audio-next"
+                    >
+                      <SkipForward size={18} />
+                    </button>
+                  </div>
+
+                  {/* Volume Control */}
+                  <div className="flex items-center gap-3 bg-neutral-950/40 px-4 py-2.5 rounded-xl border border-white/5">
+                    <button 
+                      onClick={() => setIsMuted(!isMuted)}
+                      className="text-paper-white-muted hover:text-cyber-blue transition"
+                      id="btn-audio-mute"
+                    >
+                      {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                    </button>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={volume}
+                      onChange={(e) => {
+                        setVolume(parseFloat(e.target.value));
+                        setIsMuted(false);
+                      }}
+                      className="w-20 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyber-blue"
+                      id="slider-audio-volume"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Playlist Section */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                <div className="glass-panel rounded-3xl p-6 flex flex-col gap-4 max-h-[460px] overflow-y-auto">
+                  <h3 className="text-base font-display font-bold uppercase tracking-wider text-paper-white-muted">
+                    MAXX FORGE PLAYLIST
+                  </h3>
+                  
+                  <div className="flex flex-col gap-2">
+                    {PLAYLIST.map((track, index) => {
+                      const isCurrent = index === currentTrackIndex;
+                      return (
+                        <div
+                          key={track.id}
+                          onClick={() => {
+                            setCurrentTrackIndex(index);
+                            setIsPlaying(true);
+                          }}
+                          className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition duration-300 ${isCurrent ? 'bg-cyber-blue/10 border-cyber-blue/40 text-cyber-blue' : 'bg-neutral-950/40 border-white/5 text-paper-white-muted hover:bg-neutral-900/60 hover:border-white/10 hover:text-paper-white'}`}
+                          id={`playlist-item-${track.id}`}
+                        >
+                          <div className="flex items-center gap-3 truncate">
+                            <span className="text-xs font-mono w-4 text-paper-white-dim">{(index + 1).toString().padStart(2, '0')}</span>
+                            <div className="truncate">
+                              <p className="text-sm font-semibold truncate leading-tight">{track.title}</p>
+                              <span className="text-[10px] font-mono text-paper-white-dim uppercase">{track.artist}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {isCurrent && isPlaying ? (
+                              <div className="flex items-center gap-0.5 w-3 h-2.5">
+                                <span className="w-[1.5px] bg-cyber-blue h-full origin-bottom bar-animation"></span>
+                                <span className="w-[1.5px] bg-cyber-blue h-2/3 origin-bottom bar-animation" style={{ animationDelay: '0.1s' }}></span>
+                                <span className="w-[1.5px] bg-cyber-blue h-1/2 origin-bottom bar-animation" style={{ animationDelay: '0.3s' }}></span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] font-mono text-paper-white-dim">{track.duration}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* External Streaming Card */}
+                <div className="glass-panel rounded-3xl p-5 border border-cyber-blue/20 bg-gradient-to-r from-neutral-950 via-neutral-950 to-cyan-950/20 flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-mono uppercase text-cyber-blue/80 tracking-widest font-bold">Streaming Portals</span>
+                    <ExternalLink size={14} className="text-cyber-blue/40" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <a href="https://spotify.com" target="_blank" rel="noreferrer" className="flex items-center justify-center py-2.5 bg-neutral-900 border border-white/5 rounded-xl text-xs font-semibold hover:border-cyber-blue hover:text-cyber-blue transition duration-300">Spotify</a>
+                    <a href="https://apple.com" target="_blank" rel="noreferrer" className="flex items-center justify-center py-2.5 bg-neutral-900 border border-white/5 rounded-xl text-xs font-semibold hover:border-cyber-blue hover:text-cyber-blue transition duration-300">Apple Music</a>
+                    <a href="https://bandlab.com" target="_blank" rel="noreferrer" className="flex items-center justify-center py-2.5 bg-neutral-900 border border-white/5 rounded-xl text-xs font-semibold hover:border-cyber-blue hover:text-cyber-blue transition duration-300">BandLab</a>
+                    <a href="https://soundcloud.com" target="_blank" rel="noreferrer" className="flex items-center justify-center py-2.5 bg-neutral-900 border border-white/5 rounded-xl text-xs font-semibold hover:border-cyber-blue hover:text-cyber-blue transition duration-300">SoundCloud</a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeSection === 'djem' && (
+            <motion.div
+              key="djem"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10"
+            >
+              {/* Left Column: Stage Console Simulator */}
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                <DjemStageSimulator />
+              </div>
+
+              {/* Right Column: Booking Inquiry Form */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                <DjemBookingForm />
+              </div>
+            </motion.div>
+          )}
+
+          {activeSection === 'aries' && (
+            <motion.div
+              key="aries"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10"
+            >
+              {/* Countdown Banner / Core Status */}
+              <div className="lg:col-span-12">
+                <AriesCountdownHeader />
+              </div>
+
+              {/* Terminal Simulator Console */}
+              <div className="lg:col-span-7">
+                <AriesTerminalConsole />
+              </div>
+
+              {/* API Integration Details */}
+              <div className="lg:col-span-5">
+                <AriesCodeSnippet />
+              </div>
+            </motion.div>
+          )}
+
+          {activeSection === 'gamedev' && (
+            <motion.div
+              key="gamedev"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10"
+            >
+              {/* Game Introduction and terminal gameplay */}
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                <GameIntroAndPlayShell />
+              </div>
+
+              {/* Art Grid & Media Gallery */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                <GameMediaGallery />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* Floating macOS Dock Navigator */}
+      <nav className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-2xl glass-dock flex items-center gap-4 md:gap-6 shadow-2xl">
+        <DockIcon 
+          label="Core Matrix" 
+          active={activeSection === 'matrix'} 
+          onClick={() => setActiveSection('matrix')}
+          id="dock-home"
+        >
+          <Home size={20} />
+        </DockIcon>
+        
+        <div className="w-[1px] h-6 bg-white/10"></div>
+
+        <DockIcon 
+          label="Prime Records" 
+          active={activeSection === 'records'} 
+          onClick={() => setActiveSection('records')}
+          id="dock-records"
+        >
+          <Disc size={20} className={isPlaying && activeSection === 'records' ? 'animate-spin' : ''} style={{ animationDuration: '4s' }} />
+        </DockIcon>
+
+        <DockIcon 
+          label="DJ Em Events" 
+          active={activeSection === 'djem'} 
+          onClick={() => setActiveSection('djem')}
+          id="dock-djem"
+        >
+          <Zap size={20} />
+        </DockIcon>
+
+        <DockIcon 
+          label="Aries AI Console" 
+          active={activeSection === 'aries'} 
+          onClick={() => setActiveSection('aries')}
+          id="dock-aries"
+        >
+          <Cpu size={20} />
+        </DockIcon>
+
+        <DockIcon 
+          label="Game Dev Studio" 
+          active={activeSection === 'gamedev'} 
+          onClick={() => setActiveSection('gamedev')}
+          id="dock-gamedev"
+        >
+          <Gamepad2 size={20} />
+        </DockIcon>
+
+        <div className="w-[1px] h-6 bg-white/10"></div>
+
+        <DockIcon 
+          label="Forge Profile" 
+          active={accountOpen} 
+          onClick={() => setAccountOpen(true)}
+          id="dock-profile"
+        >
+          <User size={20} className="text-moss-green" />
+        </DockIcon>
+      </nav>
+
+      {/* Forge Account Sliding Side Panel (Drawer) */}
+      <AnimatePresence>
+        {accountOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-55 bg-black/60 backdrop-blur-sm flex justify-end"
+            onClick={() => setAccountOpen(false)}
+            id="drawer-backdrop"
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-full max-w-md h-full bg-obsidian-surface/95 border-l border-white/10 glass-panel-heavy p-6 flex flex-col gap-6 shadow-2xl overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                <div className="flex items-center gap-2">
+                  <User className="text-moss-green" size={20} />
+                  <h2 className="text-lg font-display font-bold uppercase tracking-wider">Forge Profile Drawer</h2>
+                </div>
+                <button
+                  onClick={() => setAccountOpen(false)}
+                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-moss-green hover:text-moss-green transition"
+                  id="btn-drawer-close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <AccountProfileModule favorites={favorites} setAccountOpen={setAccountOpen} setActiveSection={setActiveSection} setCurrentTrackIndex={setCurrentTrackIndex} setIsPlaying={setIsPlaying} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Forms Center Modal */}
+      <FormsCenter isOpen={formsOpen} onClose={() => setFormsOpen(false)} />
+
+      {/* Calendar Panel Modal */}
+      <CalendarPanel isOpen={calendarOpen} onClose={() => setCalendarOpen(false)} />
+
+      {/* AI Chat System Overlay */}
+      <AIChatSystem />
+    </div>
+  );
+}
+
+// =====================================================
+// DOCK ICON NAV HELPER
+// =====================================================
+function DockIcon({ children, label, active, onClick, id }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div 
+      className="relative flex flex-col items-center"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Label Tooltip */}
+      <AnimatePresence>
+        {hovered && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: -40, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute z-60 pointer-events-none px-2.5 py-1 rounded bg-neutral-900 border border-white/10 text-[10px] font-mono tracking-wider font-semibold whitespace-nowrap text-paper-white shadow-lg"
+          >
+            {label}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <button
+        onClick={onClick}
+        id={id}
+        className={`p-3 rounded-xl transition duration-300 ${active ? 'bg-moss-green text-neutral-950 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110' : 'bg-white/5 border border-white/5 text-paper-white-muted hover:bg-neutral-900 hover:text-paper-white hover:scale-110'}`}
+      >
+        {children}
+      </button>
+
+      {/* Dock Active Light Indicator */}
+      {active && (
+        <span className="absolute bottom-0 w-1 h-1 rounded-full bg-moss-green shadow-[0_0_5px_#10B981]"></span>
+      )}
+    </div>
+  );
+}
+
+// =====================================================
+// DJ EM: LIVE STAGE LIGHT CONSOLE
+// =====================================================
+function DjemStageSimulator() {
+  const [dmxRed, setDmxRed] = useState(16);
+  const [dmxGreen, setDmxGreen] = useState(185);
+  const [dmxBlue, setDmxBlue] = useState(129);
+
+  const [laserOn, setLaserOn] = useState(true);
+  const [strobeOn, setStrobeOn] = useState(false);
+  const [smokeOn, setSmokeOn] = useState(false);
+  const [activeWash, setActiveWash] = useState('Flood');
+
+  // Trigger color presets
+  const applyPreset = (r, g, b) => {
+    setDmxRed(r);
+    setDmxGreen(g);
+    setDmxBlue(b);
+  };
+
+  return (
+    <div className="glass-panel rounded-3xl p-6 flex flex-col gap-6 glow-moss relative overflow-hidden">
+      <div className="flex justify-between items-center border-b border-white/5 pb-4">
+        <div className="flex items-center gap-2">
+          <Sliders className="text-moss-green" size={18} />
+          <span className="text-sm font-display font-bold uppercase tracking-wider text-moss-green">DMX Stage Laser Terminal</span>
+        </div>
+        <span className="px-2.5 py-1 rounded bg-moss-green/10 border border-moss-green/20 text-[9px] font-mono text-moss-green font-bold">
+          DMX SIGNAL: LIVE
+        </span>
+      </div>
+
+      {/* Interactive Visualizer Canvas / Screen */}
+      <div className={`relative w-full h-44 rounded-2xl border border-white/10 flex flex-col justify-center items-center overflow-hidden transition-all duration-500`}
+        style={{
+          background: `radial-gradient(circle, rgba(${dmxRed}, ${dmxGreen}, ${dmxBlue}, 0.2) 0%, #050508 100%)`,
+          filter: smokeOn ? 'blur(1.5px)' : 'none'
+        }}
+      >
+        {/* Mock Stage Frame */}
+        <div className="absolute inset-x-0 top-0 h-4 border-b border-white/5 bg-neutral-900/50 flex justify-around items-center px-10">
+          <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
+          <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
+          <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
+        </div>
+
+        {/* Flashing Strobe Element */}
+        {strobeOn && (
+          <div className="absolute inset-0 bg-white/25 mix-blend-overlay animate-ping pointer-events-none" style={{ animationDuration: '0.18s' }}></div>
+        )}
+
+        {/* Simulated Lasers */}
+        {laserOn && (
+          <div className="absolute inset-0 flex justify-center items-center pointer-events-none overflow-hidden">
+            <svg className="w-full h-full opacity-60" viewBox="0 0 400 200">
+              <line x1="200" y1="0" x2="50" y2="200" stroke={`rgb(${dmxRed}, ${dmxGreen}, ${dmxBlue})`} strokeWidth="1.5" className="animate-pulse" />
+              <line x1="200" y1="0" x2="150" y2="200" stroke={`rgb(${dmxRed}, ${dmxGreen}, ${dmxBlue})`} strokeWidth="1" />
+              <line x1="200" y1="0" x2="250" y2="200" stroke={`rgb(${dmxRed}, ${dmxGreen}, ${dmxBlue})`} strokeWidth="1" />
+              <line x1="200" y1="0" x2="350" y2="200" stroke={`rgb(${dmxRed}, ${dmxGreen}, ${dmxBlue})`} strokeWidth="1.5" className="animate-pulse" />
+            </svg>
+          </div>
+        )}
+
+        {/* System telemetry outputs on simulator screen */}
+        <div className="absolute bottom-3 left-4 right-4 flex justify-between items-center text-[9px] font-mono text-paper-white-dim bg-black/60 px-3 py-1.5 rounded-lg border border-white/5">
+          <span className="text-moss-green uppercase">DMX: R-{dmxRed} G-{dmxGreen} B-{dmxBlue}</span>
+          <span>WASH: {activeWash.toUpperCase()}</span>
+          <span>LASER: {laserOn ? 'ON' : 'OFF'}</span>
+        </div>
+
+        <span className="text-[10px] font-mono text-paper-white-muted tracking-widest font-bold z-10 uppercase bg-black/30 px-3 py-1 rounded-full border border-white/5">
+          Virtual stage test environment
+        </span>
+      </div>
+
+      {/* RGB Controls */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/5 p-4 rounded-2xl border border-white/5">
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-mono text-paper-white-muted uppercase font-semibold">Stage color parameters</span>
+          
+          {/* Slider R */}
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs font-mono text-red-500 w-8">RED</span>
+            <input
+              type="range"
+              min="0"
+              max="255"
+              value={dmxRed}
+              onChange={(e) => setDmxRed(parseInt(e.target.value))}
+              className="flex-grow h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-red-500"
+              id="slider-dmx-r"
+            />
+            <span className="text-xs font-mono w-8 text-right">{dmxRed}</span>
+          </div>
+
+          {/* Slider G */}
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs font-mono text-green-500 w-8">GRN</span>
+            <input
+              type="range"
+              min="0"
+              max="255"
+              value={dmxGreen}
+              onChange={(e) => setDmxGreen(parseInt(e.target.value))}
+              className="flex-grow h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-green-500"
+              id="slider-dmx-g"
+            />
+            <span className="text-xs font-mono w-8 text-right">{dmxGreen}</span>
+          </div>
+
+          {/* Slider B */}
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs font-mono text-blue-500 w-8">BLU</span>
+            <input
+              type="range"
+              min="0"
+              max="255"
+              value={dmxBlue}
+              onChange={(e) => setDmxBlue(parseInt(e.target.value))}
+              className="flex-grow h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              id="slider-dmx-b"
+            />
+            <span className="text-xs font-mono w-8 text-right">{dmxBlue}</span>
+          </div>
+        </div>
+
+        {/* Scene Presets & Wash types */}
+        <div className="flex flex-col justify-between gap-3 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-mono text-paper-white-muted uppercase font-semibold">Preset Macros</span>
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => applyPreset(16, 185, 129)} // Moss green
+                className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono hover:bg-emerald-500/20 transition"
+              >
+                Moss Green
+              </button>
+              <button 
+                onClick={() => applyPreset(0, 229, 255)} // Cyber blue
+                className="px-2.5 py-1 rounded bg-cyan-500/10 border border-cyan-500/20 text-[10px] font-mono hover:bg-cyan-500/20 transition"
+              >
+                Cyber Blue
+              </button>
+              <button 
+                onClick={() => applyPreset(155, 77, 255)} // Violet
+                className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-[10px] font-mono hover:bg-purple-500/20 transition"
+              >
+                Neon Violet
+              </button>
+              <button 
+                onClick={() => applyPreset(239, 68, 68)} // Red Alert
+                className="px-2.5 py-1 rounded bg-red-500/10 border border-red-500/20 text-[10px] font-mono hover:bg-red-500/20 transition"
+              >
+                Red Alert
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-mono text-paper-white-muted uppercase font-semibold">Wash Mode</span>
+            <div className="flex gap-2">
+              {['Flood', 'Spot', 'Beam'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setActiveWash(mode)}
+                  className={`flex-grow py-1 rounded text-[10px] font-mono border transition duration-300 ${activeWash === mode ? 'bg-moss-green text-neutral-950 border-moss-green font-bold' : 'bg-neutral-900 border-white/5 text-paper-white-muted hover:border-white/10'}`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* DMX Hardware simulation parameters */}
+      <div className="grid grid-cols-3 gap-3">
+        <button
+          onClick={() => setLaserOn(!laserOn)}
+          className={`py-2 rounded-xl text-xs font-semibold border transition duration-300 ${laserOn ? 'bg-cyan-950/40 border-cyber-blue text-cyber-blue font-bold shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'bg-neutral-900/60 border-white/5 text-paper-white-muted hover:border-white/15'}`}
+          id="btn-dmx-laser"
+        >
+          Lasers: {laserOn ? 'ON' : 'OFF'}
+        </button>
+        <button
+          onClick={() => setStrobeOn(!strobeOn)}
+          className={`py-2 rounded-xl text-xs font-semibold border transition duration-300 ${strobeOn ? 'bg-amber-950/40 border-amber-500 text-amber-500 font-bold shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-neutral-900/60 border-white/5 text-paper-white-muted hover:border-white/15'}`}
+          id="btn-dmx-strobe"
+        >
+          Strobe: {strobeOn ? 'ON' : 'OFF'}
+        </button>
+        <button
+          onClick={() => setSmokeOn(!smokeOn)}
+          className={`py-2 rounded-xl text-xs font-semibold border transition duration-300 ${smokeOn ? 'bg-emerald-950/40 border-moss-green text-moss-green font-bold shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-neutral-900/60 border-white/5 text-paper-white-muted hover:border-white/15'}`}
+          id="btn-dmx-smoke"
+        >
+          Fog: {smokeOn ? 'ON' : 'OFF'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DjemBookingForm() {
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    eventType: 'Concert Visual Rigging',
+    message: ''
+  });
+
+  const handleFormChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleBookingSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.email) return;
+
+    setSending(true);
+    // Simulate API connection
+    setTimeout(() => {
+      setSending(false);
+      setFormSubmitted(true);
+    }, 1500);
+  };
+
+  return (
+    <div className="glass-panel rounded-3xl p-6 flex flex-col gap-6 relative overflow-hidden">
+      <h3 className="text-base font-display font-bold uppercase tracking-wider text-paper-white-muted">
+        Stage Booking Inquiry
+      </h3>
+
+      <AnimatePresence mode="wait">
+        {!formSubmitted ? (
+          <motion.form 
+            key="booking-form"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onSubmit={handleBookingSubmit} 
+            className="flex flex-col gap-4"
+            id="form-booking"
+          >
+            {/* Input Name */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-paper-white-dim uppercase font-bold tracking-wider">Your Name</label>
+              <input
+                type="text"
+                name="name"
+                required
+                value={formData.name}
+                onChange={handleFormChange}
+                placeholder="e.g. DJ Zeppelin"
+                className="px-4 py-2.5 bg-neutral-950/60 border border-white/5 rounded-xl focus:border-moss-green focus:outline-none text-sm transition duration-300"
+                id="input-booking-name"
+              />
+            </div>
+
+            {/* Input Email */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-paper-white-dim uppercase font-bold tracking-wider">Email Address</label>
+              <input
+                type="email"
+                name="email"
+                required
+                value={formData.email}
+                onChange={handleFormChange}
+                placeholder="zepp@prime-agency.com"
+                className="px-4 py-2.5 bg-neutral-950/60 border border-white/5 rounded-xl focus:border-moss-green focus:outline-none text-sm transition duration-300"
+                id="input-booking-email"
+              />
+            </div>
+
+            {/* Input Event Type */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-paper-white-dim uppercase font-bold tracking-wider">Ecosystem Need</label>
+              <select
+                name="eventType"
+                value={formData.eventType}
+                onChange={handleFormChange}
+                className="px-4 py-2.5 bg-neutral-950/60 border border-white/5 rounded-xl focus:border-moss-green focus:outline-none text-sm text-paper-white-muted transition duration-300"
+                id="select-booking-type"
+              >
+                <option value="Concert Visual Rigging">Concert Visual Rigging (TouchDesigner)</option>
+                <option value="DMX System Design">DMX System Automation Logic</option>
+                <option value="Audio Collaboration Remix">Prime Records Remix/Collab</option>
+                <option value="Aries AI Local Integration">Aries Tech Local Setup</option>
+              </select>
+            </div>
+
+            {/* Input Message */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono text-paper-white-dim uppercase font-bold tracking-wider">Rig Details / Requirements</label>
+              <textarea
+                name="message"
+                rows="3"
+                value={formData.message}
+                onChange={handleFormChange}
+                placeholder="Include stage sizes, lighting outputs, custom requirements..."
+                className="px-4 py-2.5 bg-neutral-950/60 border border-white/5 rounded-xl focus:border-moss-green focus:outline-none text-sm transition duration-300 resize-none"
+                id="input-booking-msg"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={sending}
+              className="mt-2 w-full py-3 bg-moss-green text-neutral-950 rounded-xl hover:bg-emerald-400 font-semibold text-sm transition duration-300 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50"
+              id="btn-booking-submit"
+            >
+              {sending ? (
+                <div className="w-5 h-5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Send size={15} />
+                  <span>Transmit DMX Telemetry</span>
+                </>
+              )}
+            </button>
+          </motion.form>
+        ) : (
+          <motion.div 
+            key="booking-success"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center text-center py-10 bg-moss-green/5 border border-moss-green/20 rounded-2xl"
+          >
+            <div className="w-12 h-12 bg-moss-green/10 border border-moss-green/30 rounded-full flex items-center justify-center text-moss-green mb-4 animate-bounce">
+              <Check size={24} />
+            </div>
+            <h4 className="text-lg font-display font-bold text-moss-green">Transmission Successful</h4>
+            <p className="text-xs text-paper-white-muted max-w-[280px] mt-2 leading-relaxed">
+              Booking inquiry received on local node. Our DMX technicians will sync via email within 24 hours.
+            </p>
+            <button
+              onClick={() => {
+                setFormSubmitted(false);
+                setFormData({ name: '', email: '', eventType: 'Concert Visual Rigging', message: '' });
+              }}
+              className="mt-6 px-5 py-2 bg-neutral-950 border border-white/10 hover:border-moss-green hover:text-moss-green text-xs font-semibold rounded-lg transition"
+              id="btn-booking-reset"
+            >
+              Compose New Transmission
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// =====================================================
+// ARIES AI & TECH SECTION: COUNTDOWN
+// =====================================================
+function AriesCountdownHeader() {
+  const [timeLeft, setTimeLeft] = useState({
+    months: 0,
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0
+  });
+
+  useEffect(() => {
+    // September 1, 2026 Rollout Target
+    const targetDate = new Date('2026-09-01T00:00:00-07:00').getTime();
+
+    const calculateTime = () => {
+      const now = new Date().getTime();
+      const diff = targetDate - now;
+
+      if (diff <= 0) {
+        setTimeLeft({ months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      const totalSecs = Math.floor(diff / 1000);
+      const totalMins = Math.floor(totalSecs / 60);
+      const totalHours = Math.floor(totalMins / 60);
+      const totalDays = Math.floor(totalHours / 24);
+
+      // Rough month calculation
+      const months = Math.floor(totalDays / 30.4);
+      const days = Math.floor(totalDays % 30.4);
+      const hours = totalHours % 24;
+      const minutes = totalMins % 60;
+      const seconds = totalSecs % 60;
+
+      setTimeLeft({ months, days, hours, minutes, seconds });
+    };
+
+    calculateTime();
+    const interval = setInterval(calculateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-r from-neutral-950 via-neutral-950 to-cyan-950/20 border-cyan-500/20 glow-blue">
+      <div className="flex flex-col gap-1.5 text-center md:text-left">
+        <div className="flex items-center justify-center md:justify-start gap-2">
+          <Cpu className="text-cyber-blue animate-pulse" size={16} />
+          <span className="text-[10px] font-mono tracking-widest text-cyber-blue font-bold uppercase">Aries Deployment Node</span>
+        </div>
+        <h2 className="text-xl md:text-2xl font-display font-black tracking-tight">ARIES AI CORE v4.0 ROLLOUT</h2>
+        <p className="text-xs text-paper-white-muted max-w-sm">
+          Local LLM integration, custom developer API plugins, and secure context vector grids deploying in Autumn 2026.
+        </p>
+      </div>
+
+      {/* Countdown Clock Grid */}
+      <div className="flex items-center gap-3 bg-neutral-900/60 p-4 rounded-2xl border border-white/5 font-mono shadow-inner">
+        {/* Month */}
+        <div className="flex flex-col items-center min-w-[50px]">
+          <span className="text-xl md:text-2xl font-extrabold text-cyber-blue text-glow-blue">{timeLeft.months.toString().padStart(2, '0')}</span>
+          <span className="text-[8px] text-paper-white-dim font-bold uppercase tracking-wider mt-1">MONTH</span>
+        </div>
+        <span className="text-white/20 pb-4 font-bold">:</span>
+        {/* Days */}
+        <div className="flex flex-col items-center min-w-[50px]">
+          <span className="text-xl md:text-2xl font-extrabold text-cyber-blue text-glow-blue">{timeLeft.days.toString().padStart(2, '0')}</span>
+          <span className="text-[8px] text-paper-white-dim font-bold uppercase tracking-wider mt-1">DAYS</span>
+        </div>
+        <span className="text-white/20 pb-4 font-bold">:</span>
+        {/* Hours */}
+        <div className="flex flex-col items-center min-w-[50px]">
+          <span className="text-xl md:text-2xl font-extrabold text-paper-white">{timeLeft.hours.toString().padStart(2, '0')}</span>
+          <span className="text-[8px] text-paper-white-dim font-bold uppercase tracking-wider mt-1">HOURS</span>
+        </div>
+        <span className="text-white/20 pb-4 font-bold">:</span>
+        {/* Mins */}
+        <div className="flex flex-col items-center min-w-[50px]">
+          <span className="text-xl md:text-2xl font-extrabold text-paper-white">{timeLeft.minutes.toString().padStart(2, '0')}</span>
+          <span className="text-[8px] text-paper-white-dim font-bold uppercase tracking-wider mt-1">MINS</span>
+        </div>
+        <span className="text-white/20 pb-4 font-bold">:</span>
+        {/* Secs */}
+        <div className="flex flex-col items-center min-w-[50px]">
+          <span className="text-xl md:text-2xl font-extrabold text-moss-green text-glow-moss">{timeLeft.seconds.toString().padStart(2, '0')}</span>
+          <span className="text-[8px] text-paper-white-dim font-bold uppercase tracking-wider mt-1">SECS</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================
+// ARIES AI & TECH SECTION: TERMINAL CONSOLE
+// =====================================================
+function AriesTerminalConsole() {
+  const [history, setHistory] = useState([
+    { text: 'Aries OS Node Console [Version 4.0.12-beta]', type: 'system' },
+    { text: 'Connecting local context tunnels over Ollama API...', type: 'system' },
+    { text: 'Type "help" for a list of available local diagnostics.', type: 'prompt' }
+  ]);
+  const [inputVal, setInputVal] = useState('');
+  const consoleBottomRef = useRef(null);
+
+  useEffect(() => {
+    if (consoleBottomRef.current) {
+      consoleBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [history]);
+
+  const handleCommandSubmit = (e) => {
+    e.preventDefault();
+    const cmd = inputVal.trim();
+    if (!cmd) return;
+
+    // Log the user prompt
+    const newHistory = [...history, { text: `guest@aries-node:~$ ${cmd}`, type: 'user' }];
+    setHistory(newHistory);
+    setInputVal('');
+
+    // Process output
+    setTimeout(() => {
+      const lowerCmd = cmd.toLowerCase();
+      if (lowerCmd === 'help') {
+        setHistory(prev => [
+          ...prev,
+          { text: 'Available Node Telemetry commands:', type: 'system' },
+          { text: '  help           Display diagnostic menu options', type: 'info' },
+          { text: '  ollama list    Verify local LLM active model list', type: 'info' },
+          { text: '  ollama run aries   Launch LLM parameter testing suite', type: 'info' },
+          { text: '  system info    Check hardware telemetry data', type: 'info' },
+          { text: '  clear          Wipe console session cache', type: 'info' }
+        ]);
+      } else if (lowerCmd === 'clear') {
+        setHistory([]);
+      } else if (lowerCmd === 'ollama list') {
+        setHistory(prev => [
+          ...prev,
+          { text: 'NAME                         ID             SIZE      MODIFIED', type: 'info' },
+          { text: 'aries-coder:latest           c8f42d91901b   4.7 GB    2 days ago', type: 'info' },
+          { text: 'aries-reasoner-70b:latest   19dfb830d1c0   42 GB     5 days ago', type: 'info' },
+          { text: 'llama3.1:latest              8f2d9e110b98   4.7 GB    1 week ago', type: 'info' }
+        ]);
+      } else if (lowerCmd === 'ollama run aries') {
+        setHistory(prev => [...prev, { text: '>>> Initializing model context weights (8.6GB VRAM reserved)...', type: 'system' }]);
+        
+        setTimeout(() => {
+          setHistory(prev => [
+            ...prev,
+            { text: '>>> Connected to Aries-Coder Core. Stream output live:', type: 'system' },
+            { text: '[Aries] Connection confirmed. System status operational. I am Aries, a specialized coding assistant built to interface with your lighting matrix, audio visualizer, and local environment endpoints. Let\'s forge something today.', type: 'aries' }
+          ]);
+        }, 1200);
+      } else if (lowerCmd === 'system info') {
+        setHistory(prev => [
+          ...prev,
+          { text: 'SYSTEM STATUS: OPERATIONAL', type: 'info' },
+          { text: '  CPU Uptime:    72h 45m 12s', type: 'info' },
+          { text: '  Local GPU:     NVIDIA GeForce RTX 5090 (24GB VRAM)', type: 'info' },
+          { text: '  VRAM Usage:    8.6GB / 24GB (Active AI Context)', type: 'info' },
+          { text: '  Server Node:   maxxforgestudio.com/api/v4 (Ping: 14ms)', type: 'info' }
+        ]);
+      } else {
+        setHistory(prev => [
+          ...prev,
+          { text: `bash: command not found: ${cmd}. Type "help" for a list of endpoints.`, type: 'error' }
+        ]);
+      }
+    }, 200);
+  };
+
+  return (
+    <div className="glass-panel rounded-3xl p-6 flex flex-col gap-4 border-cyan-500/20 bg-neutral-950/70 shadow-2xl h-[380px] overflow-hidden">
+      <div className="flex justify-between items-center border-b border-white/10 pb-3 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <Terminal className="text-cyber-blue" size={16} />
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyber-blue">Interactive Diagnostic Terminal</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500/30"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500/30"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/30"></span>
+        </div>
+      </div>
+
+      {/* Terminal History Box */}
+      <div className="flex-grow overflow-y-auto font-mono text-xs flex flex-col gap-2.5 pr-2 custom-scrollbar">
+        {history.map((line, idx) => {
+          let colorClass = 'text-paper-white-muted';
+          if (line.type === 'system') colorClass = 'text-cyber-blue-dark font-semibold';
+          if (line.type === 'user') colorClass = 'text-paper-white font-bold';
+          if (line.type === 'error') colorClass = 'text-red-500';
+          if (line.type === 'aries') colorClass = 'text-moss-green bg-emerald-500/5 px-2 py-1.5 rounded border border-emerald-500/10';
+          if (line.type === 'prompt') colorClass = 'text-cyber-blue font-semibold';
+
+          return (
+            <div key={idx} className={`leading-relaxed whitespace-pre-wrap ${colorClass}`}>
+              {line.text}
+            </div>
+          );
+        })}
+        <div ref={consoleBottomRef} />
+      </div>
+
+      {/* Input Shell Form */}
+      <form onSubmit={handleCommandSubmit} className="flex items-center gap-2 border-t border-white/5 pt-3 flex-shrink-0" id="form-terminal">
+        <span className="text-xs font-mono text-cyber-blue font-bold">guest@aries-node:~$</span>
+        <input
+          type="text"
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          placeholder="Type 'help' or 'system info'..."
+          className="flex-grow bg-transparent border-none outline-none font-mono text-xs text-paper-white caret-cyber-blue focus:ring-0 p-0"
+          autoFocus
+          autoComplete="off"
+          id="input-terminal-cmd"
+        />
+        <button type="submit" className="hidden">Enter</button>
+      </form>
+    </div>
+  );
+}
+
+// =====================================================
+// ARIES AI & TECH SECTION: CODE SNIPPET WIDGET
+// =====================================================
+function AriesCodeSnippet() {
+  const [copied, setCopied] = useState(false);
+  const codeStr = `import requests
+
+# Connection to local Aries API endpoints
+client = requests.Session()
+client.headers.update({
+    "Authorization": "Bearer mfs_live_9a2f1b0b98",
+    "Content-Type": "application/json"
+})
+
+def generate_dmx_prompt(concept):
+    response = client.post(
+        "http://localhost:11434/api/v4/generate",
+        json={
+            "model": "aries-coder:latest",
+            "prompt": f"Convert to DMX lighting triggers: {concept}",
+            "stream": False
+        }
+    )
+    return response.json()["response"]
+
+# Stream light layout triggers
+print(generate_dmx_prompt("Strobe blue lasers on beat pulse"))`;
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(codeStr);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="glass-panel rounded-3xl p-6 flex flex-col gap-4 border-cyan-500/20 bg-neutral-950/40">
+      <div className="flex justify-between items-center border-b border-white/5 pb-3">
+        <span className="text-xs font-mono uppercase tracking-wider text-paper-white-muted font-bold">Python SDK Integration</span>
+        <button
+          onClick={copyToClipboard}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 border border-white/10 hover:border-cyber-blue hover:text-cyber-blue text-[10px] font-mono rounded-lg transition"
+          id="btn-code-copy"
+        >
+          {copied ? (
+            <>
+              <Check size={12} className="text-cyber-blue" />
+              <span>COPIED</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span>COPY API RAW</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      <pre className="p-4 bg-black/60 rounded-2xl border border-white/5 text-[11px] font-mono overflow-x-auto text-paper-white-muted leading-relaxed max-h-[300px]">
+        <code>
+          <span className="text-cyan-400">import</span> requests<br/><br/>
+          <span className="text-emerald-500"># Connection to local Aries API endpoints</span><br/>
+          client = requests.Session()<br/>
+          client.headers.update(&#123;<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-purple-400">"Authorization"</span>: <span className="text-amber-300">"Bearer mfs_live_9a2f1b0b98"</span>,<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-purple-400">"Content-Type"</span>: <span className="text-amber-300">"application/json"</span><br/>
+          &#125;)<br/><br/>
+          <span className="text-cyan-400">def</span> <span className="text-emerald-400">generate_dmx_prompt</span>(concept):<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;response = client.post(<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-amber-300">"http://localhost:11434/api/v4/generate"</span>,<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;json=&#123;<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-purple-400">"model"</span>: <span className="text-amber-300">"aries-coder:latest"</span>,<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-purple-400">"prompt"</span>: f<span className="text-amber-300">"Convert to DMX lighting triggers: &#123;concept&#125;"</span>,<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-purple-400">"stream"</span>: <span className="text-purple-400">False</span><br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#125;<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;)<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-cyan-400">return</span> response.json()[<span className="text-amber-300">"response"</span>]<br/><br/>
+          <span className="text-emerald-500"># Stream light layout triggers</span><br/>
+          <span className="text-cyan-400">print</span>(generate_dmx_prompt(<span className="text-amber-300">"Strobe blue lasers on beat pulse"</span>))
+        </code>
+      </pre>
+    </div>
+  );
+}
+
+// =====================================================
+// GAME DEV: GAME INTRO & PLAYABLE DEMO CONSOLE
+// =====================================================
+function GameIntroAndPlayShell() {
+  const [gameState, setGameState] = useState('start'); // start, gate, console, input_code, escape, darkness, death
+  const [consoleLog, setConsoleLog] = useState([
+    'ECHOES OF THE FORGE SYSTEM v0.80',
+    'Unity Standalone Engine: Boot sequence active...',
+    '--------------------------------------------------'
+  ]);
+
+  const addLog = (lines) => {
+    setConsoleLog(prev => [...prev, ...lines]);
+  };
+
+  const handleAction = (action) => {
+    if (action === 'gate') {
+      setGameState('gate');
+      addLog([
+        '> Action: Shake iron gate',
+        'You grab the heavy concrete-encrusted iron bars. They rattle loudly but do not budge.',
+        'A chilling metallic screech echoes from the dark corridors behind you. Something heard you.',
+        'You have limited time before the darkness closes in.'
+      ]);
+    } else if (action === 'console') {
+      setGameState('console');
+      addLog([
+        '> Action: Check control console',
+        'You approach the terminal. The screen flicker casts a faint blue glow on the dust.',
+        'A blinking prompt asks for a 4-character BYPASS HEX CODE.',
+        'Next to the keyboard, someone scratched a note in the concrete: "MOSS IS GOLD".'
+      ]);
+    } else if (action === 'room') {
+      setGameState('darkness');
+      addLog([
+        '> Action: Inspect dark corners',
+        'You slide along the rough concrete wall into the pitch darkness.',
+        'Your foot kicks a metal toolbox. Inside, you find a piece of tape with letters: "10B9" scribbled in marker.',
+        'Suddenly, you feel a drop in temperature. Red glowing nodes activate on the ceiling. You must act fast.'
+      ]);
+    } else if (action === 'solve') {
+      setGameState('escape');
+      addLog([
+        '> Action: Enter code "10B9"',
+        'You type in the hex code. The keyboard keys clack heavily.',
+        'The screen flashes bright green. A hydraulic hiss sounds overhead.',
+        'The concrete support locks release, and the heavy iron gate swings slowly open.',
+        'You sprint through as the lights in the main sector shut down completely.',
+        'Congratulations. You survived the initial level.'
+      ]);
+    } else if (action === 'die') {
+      setGameState('death');
+      addLog([
+        '> Action: Back away',
+        'You back away from the console in panic, stumbling over wires.',
+        'The cold air envelopes you as two glowing crimson nodes emerge from the dark hallway.',
+        'The connection fails. Diagnostics terminated.'
+      ]);
+    } else if (action === 'reset') {
+      setGameState('start');
+      setConsoleLog([
+        'ECHOES OF THE FORGE SYSTEM v0.80',
+        'Unity Standalone Engine: Boot sequence active...',
+        '--------------------------------------------------'
+      ]);
+    }
+  };
+
+  return (
+    <div className="glass-panel rounded-3xl p-6 flex flex-col gap-6 bg-neutral-950/60 border-red-500/10">
+      <div className="flex flex-col gap-1 text-left">
+        <div className="flex items-center gap-2">
+          <Flame className="text-red-500 animate-pulse" size={16} />
+          <span className="text-[10px] font-mono tracking-widest text-red-500 font-bold uppercase">Survival Horror Project</span>
+        </div>
+        <h2 className="text-2xl font-display font-black tracking-tight">ECHOES OF THE FORGE</h2>
+        <p className="text-sm text-paper-white-muted font-light leading-relaxed max-w-xl">
+          An atmospheric third-person survival horror game built on Unity. Navigate cold geometric Japanese structures, automate system grids to escape stalkers, and master wabi-sabi concrete environments.
+        </p>
+      </div>
+
+      {/* Mini-Game Console */}
+      <div className="flex flex-col gap-4 bg-black/80 rounded-2xl border border-white/5 p-5 font-mono text-[11px] shadow-inner h-[280px]">
+        {/* Terminal Screen log */}
+        <div className="flex-grow overflow-y-auto flex flex-col gap-2 text-paper-white-muted pr-2 custom-scrollbar">
+          {consoleLog.map((line, idx) => (
+            <div 
+              key={idx} 
+              className={line.startsWith('>') ? 'text-red-500 font-bold' : line.startsWith('Congrat') ? 'text-moss-green font-bold' : ''}
+            >
+              {line}
+            </div>
+          ))}
+          {gameState === 'start' && (
+            <div className="text-paper-white font-semibold mt-2">
+              You awaken inside a concrete cell. Bioluminescent moss grows on the walls, providing faint light. A locked iron gate blocks your exit. What is your path?
+            </div>
+          )}
+        </div>
+
+        {/* Options Input buttons */}
+        <div className="flex-shrink-0 border-t border-white/5 pt-4 flex flex-wrap gap-2.5">
+          {gameState === 'start' && (
+            <>
+              <button 
+                onClick={() => handleAction('gate')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-red-500 hover:text-red-500 rounded-lg transition"
+                id="btn-game-choice-gate"
+              >
+                1. Shake the iron gate
+              </button>
+              <button 
+                onClick={() => handleAction('console')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-cyber-blue hover:text-cyber-blue rounded-lg transition"
+                id="btn-game-choice-console"
+              >
+                2. Search the console
+              </button>
+              <button 
+                onClick={() => handleAction('room')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-moss-green hover:text-moss-green rounded-lg transition"
+                id="btn-game-choice-room"
+              >
+                3. Inspect the dark corner
+              </button>
+            </>
+          )}
+
+          {gameState === 'gate' && (
+            <>
+              <button 
+                onClick={() => handleAction('console')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-cyber-blue hover:text-cyber-blue rounded-lg transition"
+              >
+                Go to the control console
+              </button>
+              <button 
+                onClick={() => handleAction('room')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-moss-green hover:text-moss-green rounded-lg transition"
+              >
+                Retreat to the dark corner
+              </button>
+            </>
+          )}
+
+          {gameState === 'console' && (
+            <>
+              <button 
+                onClick={() => handleAction('die')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-red-500 hover:text-red-500 rounded-lg transition"
+              >
+                Guess random hex code
+              </button>
+              <button 
+                onClick={() => handleAction('room')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-moss-green hover:text-moss-green rounded-lg transition"
+              >
+                Search the dark corner for clues
+              </button>
+            </>
+          )}
+
+          {gameState === 'darkness' && (
+            <>
+              <button 
+                onClick={() => handleAction('solve')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-moss-green hover:text-moss-green rounded-lg transition"
+                id="btn-game-solve"
+              >
+                Enter code "10B9" in the console
+              </button>
+              <button 
+                onClick={() => handleAction('die')}
+                className="px-3.5 py-2 bg-neutral-900 border border-white/10 hover:border-red-500 hover:text-red-500 rounded-lg transition"
+              >
+                Attempt escape in pitch blackness
+              </button>
+            </>
+          )}
+
+          {(gameState === 'escape' || gameState === 'death' || gameState === 'die') && (
+            <button 
+              onClick={() => handleAction('reset')}
+              className="px-5 py-2 bg-red-500/10 border border-red-500/30 text-red-500 font-bold rounded-lg hover:bg-red-500/20 transition flex items-center gap-1.5"
+              id="btn-game-reset"
+            >
+              <span>Initialize Reload Matrix</span>
+              <ChevronRight size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================
+// GAME DEV: GAME MEDIA GRID GALLERY
+// =====================================================
+function GameMediaGallery() {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  return (
+    <div className="glass-panel rounded-3xl p-6 flex flex-col gap-5 border-red-500/10">
+      <div className="flex justify-between items-center border-b border-white/5 pb-3">
+        <span className="text-xs font-mono uppercase tracking-wider text-paper-white-muted font-bold">Concept Art Showcase</span>
+        <span className="px-2.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[9px] font-mono text-red-500 font-bold">
+          4K RENDER
+        </span>
+      </div>
+
+      {/* Main Art Card */}
+      <div 
+        onClick={() => setLightboxOpen(true)}
+        className="group relative h-48 rounded-2xl border border-white/10 overflow-hidden cursor-pointer shadow-xl"
+        id="card-game-media"
+      >
+        <div className="absolute inset-0 bg-neutral-950/40 group-hover:bg-neutral-950/10 transition duration-300 z-10" />
+        <img 
+          src="/survival_horror_concept.jpg" 
+          alt="Unity survival horror game environment design concept"
+          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+        />
+        <div className="absolute bottom-4 left-4 z-20 flex flex-col gap-0.5">
+          <span className="text-xs font-display font-extrabold uppercase tracking-wider text-paper-white group-hover:text-red-500 transition duration-300">Level 1 - The Bio Forge</span>
+          <span className="text-[9px] font-mono text-paper-white-dim">Moss Concrete & Cyber-Blue Grid Nodes</span>
+        </div>
+        <div className="absolute top-4 right-4 bg-black/60 p-2 rounded-lg border border-white/10 text-paper-white opacity-0 group-hover:opacity-100 transition duration-300 z-20">
+          <Eye size={14} />
+        </div>
+      </div>
+
+      {/* Thumbnail grids */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="h-16 rounded-xl border border-white/5 bg-neutral-950/60 overflow-hidden opacity-60 hover:opacity-100 cursor-pointer transition">
+          <img src="/survival_horror_concept.jpg" className="w-full h-full object-cover filter saturate-50" alt="thumbnail 1" />
+        </div>
+        <div className="h-16 rounded-xl border border-white/5 bg-neutral-900 flex items-center justify-center text-paper-white-dim text-[10px] font-mono uppercase font-bold text-center">
+          Sector <br/> Map
+        </div>
+        <div className="h-16 rounded-xl border border-white/5 bg-neutral-900 flex items-center justify-center text-paper-white-dim text-[10px] font-mono uppercase font-bold text-center">
+          Visual <br/> Reels
+        </div>
+      </div>
+
+      {/* Fullscreen Lightbox Modal */}
+      <AnimatePresence>
+        {lightboxOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex items-center justify-center p-6"
+            onClick={() => setLightboxOpen(false)}
+            id="lightbox-backdrop"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-4xl glass-panel-heavy rounded-2xl overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setLightboxOpen(false)}
+                className="absolute top-4 right-4 z-70 p-2 rounded-lg bg-black/60 border border-white/10 text-white hover:text-red-500 hover:border-red-500/50 transition"
+                id="btn-lightbox-close"
+              >
+                <X size={18} />
+              </button>
+              
+              <img 
+                src="/survival_horror_concept.jpg" 
+                alt="Level 1 Bio Forge Concept Rendering" 
+                className="w-full max-h-[70vh] object-contain"
+              />
+              
+              <div className="p-5 border-t border-white/5 bg-neutral-950 flex justify-between items-center text-xs">
+                <div className="flex flex-col gap-1">
+                  <span className="font-display font-bold text-paper-white">ECHOES OF THE FORGE - Concept Rendition 01</span>
+                  <span className="font-mono text-paper-white-muted">Environment details: 3D concrete geometries, integrated fiber cables, native botanical systems.</span>
+                </div>
+                <span className="px-2.5 py-1 bg-red-500/10 border border-red-500/30 text-red-500 font-mono text-[10px] font-bold rounded">
+                  STAGE-DRAFT-2026
+                </span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// =====================================================
+// FORGE PROFILE DRAWER COMPONENT
+// =====================================================
+function AccountProfileModule({ favorites, setAccountOpen, setActiveSection, setCurrentTrackIndex, setIsPlaying }) {
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+  const [discordLinked, setDiscordLinked] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const triggerDiscordLink = () => {
+    if (discordLinked) return;
+    setSyncing(true);
+    // Mock authentication trigger
+    setTimeout(() => {
+      setSyncing(false);
+      setDiscordLinked(true);
+    }, 1500);
+  };
+
+  if (!currentUser) return null;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Profile Header Card */}
+      <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+        <div className="relative w-16 h-16 flex-shrink-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-moss-green to-cyber-blue rounded-full animate-pulse-slow" />
+          <div className="relative w-full h-full bg-neutral-950 rounded-full border border-white/20 flex items-center justify-center font-display font-extrabold text-lg text-moss-green shadow-inner">
+            {currentUser.avatar}
+          </div>
+          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-moss-green border-2 border-obsidian-surface shadow-[0_0_5px_#10B981]" title="Node status active"></span>
+        </div>
+
+        <div className="flex-grow">
+          <h3 className="text-base font-display font-bold text-paper-white">{currentUser.name}</h3>
+          <span className="text-[10px] font-mono text-paper-white-muted uppercase truncate block max-w-[200px]">{currentUser.email}</span>
+          
+          <div className="flex items-center gap-1.5 mt-2 bg-moss-green/10 border border-moss-green/20 rounded px-2 py-0.5 w-max">
+            <Sparkles size={10} className="text-moss-green" />
+            <span className="text-[8px] font-mono text-moss-green font-bold uppercase tracking-wider">{currentUser.badge}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* User Stats / Telemetry */}
+      <div className="flex flex-col gap-3 bg-neutral-950/60 p-4 rounded-2xl border border-white/5 font-mono text-xs">
+        <span className="text-[10px] text-paper-white-dim uppercase font-bold tracking-wider">Ecosystem Telemetry</span>
+        
+        <div className="flex justify-between items-center py-1">
+          <span className="text-paper-white-muted">Node XP Points</span>
+          <span className="text-paper-white font-bold">12,450 XP</span>
+        </div>
+        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-moss-green rounded-full" style={{ width: '65%' }}></div>
+        </div>
+
+        <div className="flex justify-between items-center py-1 border-t border-white/5 mt-2">
+          <span className="text-paper-white-muted">Connected Nodes</span>
+          <span className="text-cyber-blue font-bold">04 / 04</span>
+        </div>
+      </div>
+
+      {/* Discord Sync Button */}
+      <div className="glass-panel rounded-2xl p-4 border border-indigo-500/20 bg-indigo-950/5 flex flex-col gap-3">
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider">Discord Integration</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+        </div>
+        
+        {discordLinked ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/30 p-2.5 rounded-xl text-xs text-indigo-200">
+              <Check size={14} className="text-indigo-400" />
+              <span>Synced as <strong>ForgeWeaver#9010</strong></span>
+            </div>
+            <button 
+              onClick={() => setDiscordLinked(false)}
+              className="text-[10px] font-mono text-indigo-400/60 hover:text-indigo-400 text-left underline"
+            >
+              Disconnect synchronization
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={triggerDiscordLink}
+            disabled={syncing}
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition duration-300 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(99,102,241,0.2)] disabled:opacity-50"
+            id="btn-discord-sync"
+          >
+            {syncing ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <Laptop size={13} />
+                <span>Link Discord Account</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Saved Tracks favorites checklist */}
+      <div className="flex flex-col gap-3">
+        <span className="text-[10px] font-mono text-paper-white-dim uppercase font-bold tracking-wider">
+          Saved Music Nodes ({favorites.length})
+        </span>
+
+        {favorites.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-white/10 rounded-xl text-xs text-paper-white-dim">
+            No items in session cache. Heart tracks in Prime Records to sync.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {favorites.map(id => {
+              const track = PLAYLIST.find(t => t.id === id);
+              if (!track) return null;
+              const trackIndex = PLAYLIST.indexOf(track);
+              return (
+                <div 
+                  key={id}
+                  onClick={() => {
+                    setAccountOpen(false);
+                    setActiveSection('records');
+                    setCurrentTrackIndex(trackIndex);
+                    setIsPlaying(true);
+                  }}
+                  className="group flex items-center justify-between p-3 bg-neutral-950/60 border border-white/5 hover:border-cyber-blue rounded-xl cursor-pointer transition duration-300"
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <Disc size={14} className="text-cyber-blue group-hover:animate-spin" style={{ animationDuration: '3s' }} />
+                    <div className="truncate">
+                      <p className="text-xs font-semibold truncate leading-tight text-paper-white">{track.title}</p>
+                      <span className="text-[8px] font-mono text-paper-white-dim">{track.artist}</span>
+                    </div>
+                  </div>
+                  <ChevronRight size={14} className="text-paper-white-dim group-hover:text-cyber-blue transition" />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Logout Action */}
+      <button
+        onClick={() => {
+          logout();
+          navigate('/login');
+        }}
+        className="w-full py-3 mt-4 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2"
+      >
+        <span>[ LOGOUT FROM MATRIX ]</span>
+      </button>
+    </div>
+  );
+}
