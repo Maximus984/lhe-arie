@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import IntroSequence3D from '../components/IntroSequence3D.jsx';
 import AIChatSystem from '../components/AIChatSystem.jsx';
 import { Disc, Zap, Cpu, Gamepad2, ArrowRight, Music, Star, Globe, Users, Award, ChevronDown } from 'lucide-react';
+import LiveViewerCounter from '../components/LiveViewerCounter.jsx';
 
 // ---- Hero 3D background ----
 function HeroParticle({ pos, color }) {
@@ -225,6 +226,14 @@ export default function Landing() {
           </motion.p>
 
           <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+          >
+            <LiveViewerCounter style="badge" />
+          </motion.div>
+
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.6 }}
@@ -362,34 +371,69 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* About the Founder */}
-      <section id="about" className="py-24 px-6">
+      {/* About the Founder & Mission Statement */}
+      <section id="about" className="py-28 px-6 relative overflow-hidden">
+        {/* Glow background decoration */}
+        <div className="absolute right-0 top-1/4 w-[500px] h-[500px] rounded-full bg-emerald-500/[0.03] blur-[120px] pointer-events-none" />
+        <div className="absolute left-0 bottom-1/4 w-[400px] h-[400px] rounded-full bg-cyan-500/[0.02] blur-[100px] pointer-events-none" />
+
         <div className="max-w-5xl mx-auto">
           <RevealSection>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              <div className="flex flex-col gap-6">
-                <span className="px-3 py-1 bg-pink-500/10 border border-pink-500/20 rounded-full text-[10px] font-mono text-pink-400 uppercase tracking-wider w-fit">The Founder</span>
-                <h2 className="text-4xl md:text-5xl font-display font-black tracking-tight">MEET<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">MAXIMUS.</span></h2>
-                <div className="flex flex-col gap-4 text-sm text-white/50 leading-relaxed">
-                  <p>Maximus is the founder and creative director of Maxx Forge Studio™ — a multi-discipline creative technology company he built from the ground up, merging his expertise across music production, live event design, software engineering, and interactive media.</p>
-                  <p>With a vision inspired by Apple's ecosystem philosophy, Maxx designed the Forge as a <strong className="text-white/80">seamlessly integrated platform</strong> where every creative discipline supports and amplifies the others. Where a beat becomes a stage light cue. Where code becomes sound.</p>
-                  <p>His flagship AI project, <strong className="text-emerald-400">Aries AI</strong>, is a locally-run LLM architecture designed for creative professionals — no cloud, no compromises. Launching September 2026.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+              {/* Left Column: Meet Maximus (7 cols) */}
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                <span className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[10px] font-mono text-emerald-400 uppercase tracking-widest w-fit font-bold">
+                  The Founder
+                </span>
+                <h2 className="text-4xl md:text-5xl font-display font-black tracking-tight leading-none text-white">
+                  MEET<br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400">MAXIMUS.</span>
+                </h2>
+                
+                <div className="flex flex-col gap-4 text-base text-white/50 leading-relaxed font-light">
+                  <p>
+                    Maximus is the founder and creative director of Maxx Forge Studio™ — a multi-discipline creative technology house built on the intersection of audio engineering, interactive software, live event automation, and artificial intelligence.
+                  </p>
+                  <p>
+                    By merging a modular ecosystem design with state-of-the-art developer pipelines, the studio serves as a playground for clean, premium interfaces that enable artists to design the future of digital art and live stage design.
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {['Music Producer', 'Visual Designer', 'AI Engineer', 'Game Developer', 'DJ', 'Studio Founder'].map(tag => (
-                    <span key={tag} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-[11px] font-mono text-white/40">{tag}</span>
+
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {['Music Producer', 'Creative Director', 'AI Architect', 'Wabi-Sabi Systems', 'Studio Founder'].map(tag => (
+                    <span key={tag} className="px-3.5 py-1.5 bg-white/[0.03] border border-white/5 rounded-xl text-[10px] font-mono text-white/40 tracking-wider">
+                      {tag}
+                    </span>
                   ))}
                 </div>
               </div>
-              <div className="flex justify-center">
-                <div className="relative w-64 h-64">
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl animate-pulse" />
-                  <div className="relative w-full h-full bg-gradient-to-br from-emerald-900/30 to-cyan-900/20 rounded-3xl border border-emerald-500/20 flex flex-col items-center justify-center gap-3 shadow-2xl">
-                    <span className="text-6xl font-display font-black text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 to-cyan-400">MX</span>
-                    <span className="text-sm font-mono text-white/30">Founder & Director</span>
-                    <div className="flex gap-2 mt-2">
-                      <span className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[9px] font-mono text-emerald-400">🔥 Founder</span>
-                    </div>
+
+              {/* Right Column: Mission Statement Card & Photo Placeholder (5 cols) */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                {/* Mission Statement Card */}
+                <div className="relative glass-panel rounded-2xl p-6 overflow-hidden border border-white/10"
+                  style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.04) 0%, rgba(0,229,255,0.02) 100%)' }}>
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
+                  
+                  <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-widest block mb-2">✦ Our Mission</span>
+                  <h3 className="text-xl font-display font-bold text-white mb-3">Imagination first. Always.</h3>
+                  <p className="text-xs text-white/60 leading-relaxed font-light">
+                    "This company was built entirely on <strong className="text-emerald-400 font-bold">imagination</strong>, and we value your imagination like a lot. Every line of code, every track produced, and every visual cue is a blank canvas for creative expression. We keep things clean, premium, and focused so your ideas can fly."
+                  </p>
+                </div>
+
+                {/* Profile Card / Photo slot */}
+                <div className="flex items-center gap-4 p-4 rounded-2xl border border-white/5 bg-white/[0.02]">
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/20 flex-shrink-0 flex items-center justify-center">
+                    {/* Placeholder slot — swap with <img src="/brand/maximus.jpg" alt="Maximus" className="w-full h-full object-cover" /> when added */}
+                    <span className="text-xl font-black text-emerald-400 font-display">MX</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white leading-tight">Maximus</h4>
+                    <p className="text-xs text-white/30 font-mono mt-0.5">Founder & Systems Architect</p>
+                    <span className="inline-block mt-1 text-[9px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono font-bold uppercase border border-emerald-500/20">
+                      🔥 Founder
+                    </span>
                   </div>
                 </div>
               </div>

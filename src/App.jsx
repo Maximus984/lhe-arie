@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { Toaster } from 'react-hot-toast';
@@ -8,6 +8,12 @@ import Dashboard from './pages/Dashboard.jsx';
 import AdminPanel from './pages/AdminPanel.jsx';
 import StaffPortal from './pages/StaffPortal.jsx';
 import MaxAiDemo from './pages/MaxAiDemo.jsx';
+import Workspace from './pages/Workspace.jsx';
+import ForgeFeed from './pages/ForgeFeed.jsx';
+import MaintenancePage from './pages/MaintenancePage.jsx';
+import PermissionsModal from './components/PermissionsModal.jsx';
+import SeasonalEffects from './components/SeasonalEffects.jsx';
+import { isMaintenanceMode, getMaintenanceMessage } from './data/analytics.js';
 
 function ProtectedRoute({ children, requiredPermission }) {
   const { currentUser, isLoading, can } = useAuth();
@@ -21,28 +27,88 @@ function ProtectedRoute({ children, requiredPermission }) {
   return children;
 }
 
+// Maintenance gate — allows founder/staff to bypass
+function MaintenanceGate({ children }) {
+  const { currentUser, can } = useAuth();
+  const [maintenance, setMaintenance] = useState(false);
+
+  useEffect(() => {
+    const check = () => setMaintenance(isMaintenanceMode());
+    check();
+    const interval = setInterval(check, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Founder and staff bypass maintenance mode
+  if (maintenance && !(currentUser && (can('toggle_maintenance') || can('view_staff_portal')))) {
+    return <MaintenancePage message={getMaintenanceMessage()} />;
+  }
+
+  return children;
+}
+
 function AppRoutes() {
   const { currentUser } = useAuth();
   return (
-    <Routes>
-      <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Landing />} />
-      <Route path="/max-ai" element={<MaxAiDemo />} />
-      <Route path="/login" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/dashboard" element={
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
-      } />
-      <Route path="/admin" element={
-        <ProtectedRoute requiredPermission="view_admin"><AdminPanel /></ProtectedRoute>
-      } />
-      <Route path="/staff" element={
-        <ProtectedRoute requiredPermission="view_staff_portal"><StaffPortal /></ProtectedRoute>
-      } />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <MaintenanceGate>
+      <Routes>
+        <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Landing />} />
+        <Route path="/max-ai" element={<MaxAiDemo />} />
+        <Route path="/login" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/dashboard" element={
+          <ProtectedRoute><Dashboard /></ProtectedRoute>
+        } />
+        <Route path="/workspace" element={
+          <ProtectedRoute requiredPermission="use_workspace"><Workspace /></ProtectedRoute>
+        } />
+        <Route path="/feed" element={
+          <ProtectedRoute><ForgeFeed /></ProtectedRoute>
+        } />
+        <Route path="/admin" element={
+          <ProtectedRoute requiredPermission="view_admin"><AdminPanel /></ProtectedRoute>
+        } />
+        <Route path="/staff" element={
+          <ProtectedRoute requiredPermission="view_staff_portal"><StaffPortal /></ProtectedRoute>
+        } />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </MaintenanceGate>
   );
 }
 
 export default function App() {
+  useEffect(() => {
+    const applyTheme = () => {
+      const theme = localStorage.getItem('mfs_theme') || 'obsidian';
+      document.documentElement.setAttribute('data-theme', theme);
+      
+      let accent = '#10B981'; 
+      let bg = '#050508';
+      if (theme === 'forge-red') {
+        accent = '#EF4444';
+        bg = '#0a0505';
+      } else if (theme === 'deep-navy') {
+        accent = '#6366F1';
+        bg = '#04040f';
+      } else if (theme === 'chrome') {
+        accent = '#a0a0b0';
+        bg = '#0a0a0d';
+      }
+      document.documentElement.style.setProperty('--color-moss-green', accent);
+      document.documentElement.style.setProperty('--color-cyber-blue', accent); 
+      document.documentElement.style.setProperty('--color-obsidian-void', bg);
+    };
+
+    applyTheme();
+
+    window.addEventListener('storage', applyTheme);
+    const interval = setInterval(applyTheme, 800); 
+    return () => {
+      window.removeEventListener('storage', applyTheme);
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -62,6 +128,8 @@ export default function App() {
             error: { iconTheme: { primary: '#EF4444', secondary: '#050508' } },
           }}
         />
+        <PermissionsModal />
+        <SeasonalEffects />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>

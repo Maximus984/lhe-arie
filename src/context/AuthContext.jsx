@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { getUsers, saveUsers, getUserByEmail, initializeUsers, hasPermission } from '../data/users.js';
+import { initializeFeed } from '../data/feed.js';
 
 const AuthContext = createContext(null);
 
@@ -29,6 +30,7 @@ export function AuthProvider({ children }) {
   // Initialize data on mount
   useEffect(() => {
     initializeUsers();
+    initializeFeed();
     
     // Restore session
     const savedSession = localStorage.getItem('mfs_session');

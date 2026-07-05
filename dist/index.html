@@ -3,10 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icons/app-icon-512.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Maxx Forge Studio™ — The interconnected ecosystem hub for Prime Records, DJ Em Live Events & Visuals, Aries Technology & AI, and Game Development." />
-    <meta name="theme-color" content="#050822" />
+    <meta name="theme-color" content="#050508" />
     <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Apple PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MFS Studio" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
     <meta property="og:title" content="Maxx Forge Studio™ | Interconnected Digital Ecosystem" />
     <meta property="og:description" content="Explore Maxx Forge Prime Records, DJ Em Event Visuals, Aries AI Software, and our Unity Survival Horror Game." />
     <meta property="og:type" content="website" />
@@ -14,10 +21,34 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-eRPciVFL.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CcUI9-aN.css">
+    <script type="module" crossorigin src="/assets/index-CSyCPL_z.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DWwbMv_R.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Register Service Worker for PWA + auto-update
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then((reg) => {
+            // Check for updates every 60 seconds
+            setInterval(() => reg.update(), 60000);
+
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'activated') {
+                  // Auto-reload when a new version is deployed
+                  if (navigator.serviceWorker.controller) {
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          }).catch((err) => console.warn('SW registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>
+

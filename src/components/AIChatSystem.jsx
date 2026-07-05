@@ -107,7 +107,7 @@ async function askMaxAi(message, history) {
     error.status = response.status;
     throw error;
   }
-  return data.text;
+  return data;
 }
 
 export default function AIChatSystem() {
@@ -126,6 +126,7 @@ export default function AIChatSystem() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [brainMode, setBrainMode] = useState('standby');
+  const [lastDiagnostic, setLastDiagnostic] = useState('');
   const [escalated, setEscalated] = useState(false);
   const [escalationSent, setEscalationSent] = useState(false);
   const [unknownCount, setUnknownCount] = useState(0);
@@ -169,12 +170,14 @@ export default function AIChatSystem() {
     setBrainMode('thinking');
 
     try {
-      const text = await askMaxAi(userText, history);
-      addMessage({ from: 'ai', text, source: 'cloud' });
+      const data = await askMaxAi(userText, history);
+      addMessage({ from: 'ai', text: data.text, source: data.provider || 'cloud' });
       setUnknownCount(0);
       setBrainMode('cloud');
+      setLastDiagnostic('');
     } catch (error) {
       const fallback = getFallbackResponse(userText);
+      setLastDiagnostic(error.message || 'Cloud brain unavailable.');
       addMessage({
         from: 'ai',
         text: fallback.response,
@@ -220,7 +223,7 @@ export default function AIChatSystem() {
   const statusText = {
     standby: 'local brain standby',
     thinking: 'thinking through Aries AI',
-    cloud: 'OpenRouter signal linked',
+    cloud: 'cloud signal linked',
     fallback: 'fallback intelligence active',
   }[brainMode];
 
@@ -330,6 +333,11 @@ export default function AIChatSystem() {
                     mediator
                   </div>
                 </div>
+                {lastDiagnostic && (
+                  <div className="border-b border-amber-300/10 bg-amber-400/[0.07] px-4 py-2 font-mono text-[10px] leading-relaxed text-amber-100/65">
+                    Cloud note: {lastDiagnostic}
+                  </div>
+                )}
 
                 <div className="flex-grow overflow-y-auto p-4">
                   <div className="mb-4 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.04] p-3">

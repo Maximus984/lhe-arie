@@ -6,6 +6,9 @@ import DynamicIsland from '../components/DynamicIsland.jsx';
 import AIChatSystem from '../components/AIChatSystem.jsx';
 import FormsCenter from '../components/FormsCenter.jsx';
 import CalendarPanel from '../components/CalendarPanel.jsx';
+import SettingsPanel from '../components/SettingsPanel.jsx';
+import BotChallenge from '../components/BotChallenge.jsx';
+import { shouldShowBotChallenge, startDiagnosticScheduler } from '../data/security.js';
 import { 
   Play, 
   Pause, 
@@ -28,6 +31,8 @@ import {
   ExternalLink, 
   Sliders, 
   Flame, 
+  MessageSquare,
+  FileText,
   ChevronRight,
   Sparkles,
   Link,
@@ -96,6 +101,7 @@ export default function App() {
   const [favorites, setFavorites] = useState([2]); // Holds indices of tracks marked as favorite
   const [formsOpen, setFormsOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   
   // Audio Player State
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
@@ -107,6 +113,27 @@ export default function App() {
 
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
+  const [botModal, setBotModal] = useState(false);
+
+  useEffect(() => {
+    // Run diagnostics scheduler in the background of active users
+    const stopScheduler = startDiagnosticScheduler((report) => {
+      console.log('Ecosystem Auto-Diagnostic sweep completed:', report);
+    });
+
+    // Check if user triggers bot challenge
+    const checkBot = () => {
+      if (shouldShowBotChallenge()) {
+        setBotModal(true);
+      }
+    };
+    const botCheckTimer = setTimeout(checkBot, 8000); // Check after 8 seconds
+
+    return () => {
+      stopScheduler();
+      clearTimeout(botCheckTimer);
+    };
+  }, []);
 
   const currentTrack = PLAYLIST[currentTrackIndex];
 
@@ -434,46 +461,64 @@ export default function App() {
       />
 
       {/* Header bar */}
-      <header className="relative z-10 w-full px-6 md:px-12 py-5 flex justify-between items-center bg-obsidian-void/40 backdrop-blur-md border-b border-white/5">
-        <button
-          onClick={() => setActiveSection('matrix')}
-          className="flex items-center gap-3 font-display font-extrabold tracking-widest text-lg md:text-xl text-paper-white hover:text-moss-green transition duration-300"
-          id="btn-nav-home"
-        >
-          <span className="w-2.5 h-2.5 rounded-full bg-moss-green shadow-[0_0_8px_#10B981]"></span>
-          MAXX FORGE STUDIO<span className="text-moss-green font-light">™</span>
-        </button>
+      <header className="relative z-50 w-full px-6 md:px-12 py-4 flex justify-between items-center bg-obsidian-void/60 backdrop-blur-md border-b border-white/5">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setActiveSection('matrix')}
+            className="flex items-center gap-3 font-display font-extrabold tracking-widest text-lg md:text-xl text-paper-white hover:text-moss-green transition duration-300"
+            id="btn-nav-home"
+          >
+            <img 
+              src="/brand/logo.png" 
+              alt="Logo" 
+              className="w-10 h-10 object-contain rounded-lg border border-white/10 p-0.5 bg-white/5" 
+            />
+            <span className="hidden sm:inline">MAXX FORGE STUDIO</span>
+          </button>
 
-        <div className="flex items-center gap-4 sm:gap-6">
-          {/* Quick Track Status Info in Header */}
-          {isPlaying && (
-            <div 
-              onClick={() => setActiveSection('records')}
-              className="hidden lg:flex items-center gap-3 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 text-xs font-mono cursor-pointer hover:bg-white/10 transition"
-              id="btn-header-nowplaying"
+          {/* Aries Constellation/Horns ("Ears") SVG */}
+          <div className="text-white/20 hover:text-emerald-400/80 transition duration-300 flex items-center justify-center" title="Aries Core">
+            <svg viewBox="0 0 100 100" width="24" height="24" className="fill-none stroke-current" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+              {/* Aries horns */}
+              <path d="M 50,85 C 50,60 40,30 20,30 C 10,30 10,45 20,45 C 30,45 40,15 50,15 C 60,15 70,45 80,45 C 90,45 90,30 80,30 C 60,30 50,60 50,85 Z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Center: Pulsing Mixer Visualizer when playing */}
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10 text-xs font-mono">
+          <div className="flex items-end gap-0.5 w-4 h-3.5 pb-0.5">
+            <span className={`w-[2px] bg-cyber-blue rounded-full origin-bottom ${isPlaying ? 'bar-animation' : 'h-1.5'}`} style={{ height: '100%', animationDelay: '0.1s' }}></span>
+            <span className={`w-[2px] bg-cyber-blue rounded-full origin-bottom ${isPlaying ? 'bar-animation' : 'h-1'}`} style={{ height: '70%', animationDelay: '0.3s' }}></span>
+            <span className={`w-[2px] bg-cyber-blue rounded-full origin-bottom ${isPlaying ? 'bar-animation' : 'h-2'}`} style={{ height: '85%', animationDelay: '0.5s' }}></span>
+          </div>
+          <span className="text-[10px] text-white/30 hidden md:inline uppercase tracking-wider">Mixer:</span>
+          <span className="text-cyber-blue font-bold text-[10px] truncate max-w-[120px]">
+            {isPlaying ? currentTrack.title : 'OFFLINE'}
+          </span>
+        </div>
+
+        {/* Right Nav buttons */}
+        <div className="flex items-center gap-2 md:gap-3">
+          
+          {/* Main workspace navigation */}
+          {can('use_workspace') && (
+            <RouterLink 
+              to="/workspace" 
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs font-semibold hover:bg-emerald-500/25 transition"
             >
-              <div className="flex items-center gap-1 w-4 h-3">
-                <span className="w-[2px] bg-cyber-blue h-full origin-bottom bar-animation"></span>
-                <span className="w-[2px] bg-cyber-blue h-2/3 origin-bottom bar-animation" style={{ animationDelay: '0.2s' }}></span>
-                <span className="w-[2px] bg-cyber-blue h-4/5 origin-bottom bar-animation" style={{ animationDelay: '0.4s' }}></span>
-              </div>
-              <span className="text-paper-white-muted">NOW PLAYING:</span>
-              <span className="text-cyber-blue font-bold truncate max-w-[120px]">{currentTrack.title}</span>
-            </div>
-          )}
-
-          {/* Platform Links & Modals */}
-          {can('view_admin') && (
-            <RouterLink to="/admin" className="px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-full text-xs font-mono font-bold hover:bg-indigo-500/20 transition">
-              Admin
+              <FileText size={12} />
+              <span className="hidden md:inline">Workspace</span>
             </RouterLink>
           )}
 
-          {can('view_staff_portal') && (
-            <RouterLink to="/staff" className="px-3.5 py-1.5 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full text-xs font-mono font-bold hover:bg-pink-500/20 transition">
-              Staff
-            </RouterLink>
-          )}
+          <RouterLink 
+            to="/feed" 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-full text-xs font-semibold hover:bg-indigo-500/25 transition"
+          >
+            <MessageSquare size={12} />
+            <span className="hidden md:inline">Forge Feed</span>
+          </RouterLink>
 
           <button
             onClick={() => setCalendarOpen(true)}
@@ -484,18 +529,18 @@ export default function App() {
 
           <button
             onClick={() => setFormsOpen(true)}
-            className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs font-mono font-bold hover:bg-emerald-500/20 transition"
+            className="px-3.5 py-1.5 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full text-xs font-mono font-bold hover:bg-pink-500/20 transition"
           >
             Forms
           </button>
 
+          {/* Settings Trigger Icon */}
           <button
-            onClick={() => setAccountOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-neutral-900/60 border border-white/10 rounded-full hover:border-moss-green hover:bg-neutral-900 transition duration-300 text-sm font-semibold text-paper-white-muted hover:text-paper-white shadow-lg"
-            id="btn-header-profile"
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 bg-neutral-900/60 border border-white/10 rounded-full hover:border-moss-green hover:bg-neutral-900 transition duration-300 text-white/60 hover:text-white"
+            title="Settings"
           >
-            <User size={15} className="text-moss-green" />
-            <span className="hidden sm:inline">Forge Account</span>
+            <Sliders size={14} />
           </button>
         </div>
       </header>
@@ -993,8 +1038,18 @@ export default function App() {
       {/* Calendar Panel Modal */}
       <CalendarPanel isOpen={calendarOpen} onClose={() => setCalendarOpen(false)} />
 
+      {/* Settings Drawer Panel */}
+      <AnimatePresence>
+        {settingsOpen && (
+          <SettingsPanel onClose={() => setSettingsOpen(false)} />
+        )}
+      </AnimatePresence>
+
       {/* AI Chat System Overlay */}
       <AIChatSystem />
+
+      {/* Bot Verification Challenge */}
+      <BotChallenge isOpen={botModal} onSuccess={() => setBotModal(false)} />
     </div>
   );
 }
