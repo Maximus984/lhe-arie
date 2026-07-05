@@ -1,95 +1,196 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, Bot, User, ChevronRight, Clock, AlertCircle, Check } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.jsx';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  AlertCircle,
+  Bot,
+  ChevronRight,
+  Clock,
+  Database,
+  Radio,
+  Send,
+  Sparkles,
+  User,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext.jsx';
+import LottiePlayer from './LottiePlayer.jsx';
 
-// ---- Built-in AI knowledge base ----
+const MAX_AI_IDENTITY = {
+  name: 'Max AI',
+  poweredBy: 'Powered by Aries AI',
+  portrait: '/ai/max-ai-portrait.png',
+  introAnimation: '/animations/ai-logo-foriday.json',
+  loadingAnimation: '/animations/ai-loading-model.json',
+  cloudAnimation: '/animations/glowing-fish-loader.json',
+};
+
 const AI_KNOWLEDGE = [
-  { triggers: ['hello', 'hi', 'hey', 'greetings'], response: "Hello! I'm **ARIA** — Aries Reactive Intelligence Assistant. I'm here to help you navigate the Maxx Forge Studio ecosystem. What can I forge for you today?" },
-  { triggers: ['who', 'founder', 'maximus', 'maxx'], response: "**Maxx** is the founder and creative director of Maxx Forge Studio™. He built the entire ecosystem from the ground up — Prime Records, DJ Em Live Events, Aries AI, and the Game Dev division. 🔥" },
-  { triggers: ['aries', 'ai', 'artificial'], response: "**Aries AI** is our flagship local LLM system built on Ollama architecture. It runs completely locally with zero cloud dependency. The full v4.0 rollout is scheduled for **September 2026**. Features include custom code generation, DMX lighting automation, and creative pipeline acceleration." },
-  { triggers: ['music', 'records', 'prime', 'album', 'track', 'song'], response: "**Maxx Forge Prime Records** is our music division. We produce high-energy remasters, original tracks, and exclusive collaborations. Our catalog includes tracks like Adrenaline Rush, Dark Queen, Electric Whisper, and more. Available on Spotify, Apple Music, BandLab, and SoundCloud." },
-  { triggers: ['dj', 'event', 'booking', 'show', 'concert', 'lighting', 'dmx'], response: "**DJ Em** leads our live events and visuals division. We offer professional stage lighting design using TouchDesigner, DMX automation systems, and live visual reels. For bookings, head to the DJ Em section and use the Stage Booking Inquiry form!" },
-  { triggers: ['game', 'unity', 'horror', 'echoes', 'forge'], response: "Our game **Echoes of the Forge** is a Unity-built atmospheric survival horror experience. Set in decaying bio-concrete Japanese-style environments with cybernetic elements. Navigate procedural puzzle grids, avoid AI-driven stalkers, and survive. Demo available now in the Game Dev section!" },
-  { triggers: ['login', 'account', 'register', 'sign', 'member'], response: "You can create a **Forge Account** from the Login page. Members get access to saved tracks, personalized dashboard, form submissions, and exclusive community features. Staff and Founder accounts are managed internally." },
-  { triggers: ['calendar', 'schedule', 'event', 'date'], response: "The **Event Calendar** is accessible from the Staff section and Dashboard. You can view upcoming studio events, live shows, and milestone dates. Founders and Staff can add events directly to the system calendar." },
-  { triggers: ['zeppelin', 'collab', 'collaboration'], response: "**Zeppelin** is a key creative collaborator and our Tech Lead at Maxx Forge. He architects the Aries AI pipeline and contributes to the software development division. Collab inquiries can be submitted through our Forms Center." },
-  { triggers: ['contact', 'reach', 'email', 'help', 'support'], response: "For inquiries, head to our **Forms Center** in the Dashboard. We have dedicated forms for event booking, music collaboration, tech consultation, and general contact. Our team typically responds within 24–48 hours!" },
-  { triggers: ['social', 'instagram', 'twitter', 'discord', 'youtube'], response: "Connect with us on our social platforms! You can also link your Discord account through the **Forge Account** profile panel for exclusive community access and real-time updates from the studio." },
-  { triggers: ['price', 'cost', 'rate', 'fee', 'charge'], response: "Pricing varies by project scope and requirements. For specific quotes, please fill out the relevant form in our **Forms Center** (booking, consultation, or collaboration) and our team will get back to you with a detailed proposal." },
+  {
+    triggers: ['hello', 'hi', 'hey', 'greetings'],
+    response: "Signal locked. I'm Max AI, powered by Aries AI. I help visitors navigate Maxx Forge Studio, route requests, and translate impossible ideas into build plans.",
+  },
+  {
+    triggers: ['who are you', 'max ai', 'aries ai', 'ai'],
+    response: 'Max AI is the Maxx Forge Studio assistant layer, powered by Aries AI. I act as a site guide, idea mediator, booking router, and technical concierge for the imaginary company.',
+  },
+  {
+    triggers: ['imaginary', 'company', 'mission', 'about', 'imagination'],
+    response: "Maxx Forge Studio is not just a digital workshop; it is a foundry for the impossible. Imagination is the ultimate source code. If you can imagine it, we're the ones building it.",
+  },
+  {
+    triggers: ['founder', 'maximus', 'maxx'],
+    response: 'Maximus leads Maxx Forge Studio as founder and creative director, connecting Aries AI, Prime Records, DJ Em visuals, game development, and unreal digital experiences into one studio system.',
+  },
+  {
+    triggers: ['form', 'submit', 'booking', 'contact', 'staff', 'founder', 'mediator'],
+    response: 'I can help you choose the right form and escalate unknown questions. Submitted forms are saved into the local studio database and visible to Founder and Staff portals on this device.',
+  },
+  {
+    triggers: ['cloud', 'storage', 'save', 'database', 'cache', 'local'],
+    response: 'This build uses a local device storage node: submissions, tickets, sessions, and calendar data are cached in browser localStorage. For cross-device staff access, the next upgrade is Firebase or a server database.',
+  },
+  {
+    triggers: ['music', 'records', 'prime', 'track', 'song'],
+    response: 'Prime Records is the sound wing: original tracks, remasters, collaborations, and sonic identity systems for the Maxx Forge universe.',
+  },
+  {
+    triggers: ['dj', 'event', 'lighting', 'dmx', 'show', 'visual'],
+    response: 'DJ Em handles live energy: stage lighting, TouchDesigner visuals, DMX automation, event rigs, and performance systems.',
+  },
+  {
+    triggers: ['game', 'unity', 'horror', 'interactive'],
+    response: 'The game division builds interactive unreal spaces: horror prototypes, cybernetic puzzle systems, environment design, and playable imagination engines.',
+  },
+  {
+    triggers: ['price', 'cost', 'rate', 'quote'],
+    response: 'Pricing depends on scope. Use the Forms Center for bookings, tech consultation, collaboration, or general contact so staff can review the exact request.',
+  },
 ];
 
-function getAIResponse(input) {
+function getFallbackResponse(input) {
   const lower = input.toLowerCase();
   for (const entry of AI_KNOWLEDGE) {
-    if (entry.triggers.some(t => lower.includes(t))) {
+    if (entry.triggers.some(trigger => lower.includes(trigger))) {
       return { found: true, response: entry.response };
     }
   }
-  return { found: false, response: null };
+  return {
+    found: false,
+    response: "I don't have a clean local answer for that yet. I can route this to staff, or you can ask about Maxx Forge Studio, Aries AI, forms, bookings, cloud storage, music, events, or game development.",
+  };
 }
 
-function parseMarkdown(text) {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>');
+function MarkdownLite({ text }) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        return <React.Fragment key={index}>{part}</React.Fragment>;
+      })}
+    </>
+  );
+}
+
+async function askMaxAi(message, history) {
+  const response = await fetch('/api/max-ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || 'Max AI cloud brain unavailable.');
+    error.status = response.status;
+    throw error;
+  }
+  return data.text;
 }
 
 export default function AIChatSystem() {
   const { currentUser, createChatTicket, onlineStaff } = useAuth();
   const [open, setOpen] = useState(false);
+  const [booted, setBooted] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
       from: 'ai',
-      text: "Hello! I'm **ARIA** — your Aries Reactive Intelligence Assistant. Ask me anything about Maxx Forge Studio™ or our services. How can I help you today?",
+      text: "Welcome to the forge. I'm **Max AI**, powered by Aries AI. I can guide you through the imaginary company, forms, bookings, local cloud storage, and staff routing.",
       timestamp: new Date().toISOString(),
-    }
+      source: 'local',
+    },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [brainMode, setBrainMode] = useState('standby');
   const [escalated, setEscalated] = useState(false);
   const [escalationSent, setEscalationSent] = useState(false);
   const [unknownCount, setUnknownCount] = useState(0);
-  const [unread, setUnread] = useState(0);
-  const bottomRef = useRef();
+  const bottomRef = useRef(null);
+
+  const staffLabel = useMemo(() => {
+    if (!onlineStaff.length) return 'local mediator standby';
+    return `${onlineStaff.length} staff signal${onlineStaff.length > 1 ? 's' : ''} online`;
+  }, [onlineStaff.length]);
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, escalated]);
 
-  const addMessage = (msg) => {
-    setMessages(prev => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), ...msg }]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const timeout = window.setTimeout(() => setBooted(true), 850);
+    return () => window.clearTimeout(timeout);
+  }, [open]);
+
+  const addMessage = (message) => {
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        timestamp: new Date().toISOString(),
+        ...message,
+      },
+    ]);
   };
 
-  const handleSend = async (e) => {
-    e.preventDefault();
+  const handleSend = async (event) => {
+    event.preventDefault();
     if (!input.trim() || isTyping) return;
 
     const userText = input.trim();
+    const history = messages.slice(-8);
     setInput('');
     addMessage({ from: 'user', text: userText });
     setIsTyping(true);
+    setBrainMode('thinking');
 
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 600));
-
-    const { found, response } = getAIResponse(userText);
-    setIsTyping(false);
-
-    if (found) {
-      addMessage({ from: 'ai', text: response });
+    try {
+      const text = await askMaxAi(userText, history);
+      addMessage({ from: 'ai', text, source: 'cloud' });
       setUnknownCount(0);
-    } else {
-      const newCount = unknownCount + 1;
-      setUnknownCount(newCount);
+      setBrainMode('cloud');
+    } catch (error) {
+      const fallback = getFallbackResponse(userText);
+      addMessage({
+        from: 'ai',
+        text: fallback.response,
+        source: error.status === 501 ? 'local' : 'fallback',
+      });
+      setBrainMode(error.status === 501 ? 'standby' : 'fallback');
 
-      if (newCount >= 2) {
-        addMessage({ from: 'ai', text: "I'm having trouble finding the right answer for you. Would you like me to **route you to a staff member** who can help directly?" });
-        setEscalated(true);
+      if (!fallback.found) {
+        const nextUnknownCount = unknownCount + 1;
+        setUnknownCount(nextUnknownCount);
+        if (nextUnknownCount >= 2) setEscalated(true);
       } else {
-        addMessage({ from: 'ai', text: "I don't have specific information on that yet. Could you rephrase or ask about our music, events, AI tech, or game dev? Or try keywords like 'booking', 'Aries AI', or 'contact'." });
+        setUnknownCount(0);
       }
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -97,8 +198,12 @@ export default function AIChatSystem() {
     const ticketData = {
       userId: currentUser?.id || 'guest',
       userName: currentUser?.name || 'Guest',
-      subject: 'AI Escalation — Staff Assistance Required',
-      messages: messages.map(m => ({ from: m.from, text: m.text, timestamp: m.timestamp })),
+      subject: 'Max AI Escalation - Staff Assistance Required',
+      messages: messages.map(message => ({
+        from: message.from,
+        text: message.text,
+        timestamp: message.timestamp,
+      })),
       priority: 'normal',
     };
     createChatTicket(ticketData);
@@ -106,49 +211,55 @@ export default function AIChatSystem() {
     setEscalated(false);
     addMessage({
       from: 'ai',
-      text: "✅ Your request has been routed to our staff team. **A staff member will be in touch with you within 10–15 minutes.** In the meantime, feel free to continue browsing the site!"
+      text: 'Escalation packet saved. Founder and Staff portals can review this conversation in the local ticket queue.',
+      source: 'local',
     });
-    toast.success('Staff member notified! Response within 10–15 min.');
+    toast.success('Max AI routed this to staff.');
   };
 
-  const handleOpen = () => {
-    setOpen(true);
-    setUnread(0);
-  };
+  const statusText = {
+    standby: 'local brain standby',
+    thinking: 'thinking through Aries AI',
+    cloud: 'OpenRouter signal linked',
+    fallback: 'fallback intelligence active',
+  }[brainMode];
 
   return (
     <>
-      {/* Chat toggle button */}
       <div className="fixed bottom-24 right-6 z-50 flex flex-col items-end gap-2">
         <AnimatePresence>
           {!open && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              initial={{ opacity: 0, scale: 0.92, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 10 }}
-              className="bg-neutral-900/90 border border-white/10 rounded-2xl px-3 py-2 text-[10px] font-mono text-white/50 backdrop-blur-xl shadow-lg whitespace-nowrap"
+              exit={{ opacity: 0, scale: 0.92, y: 10 }}
+              className="max-w-[260px] rounded-2xl border border-cyan-400/20 bg-black/80 px-3 py-2 text-right font-mono text-[10px] text-cyan-100/70 shadow-[0_0_28px_rgba(0,229,255,0.18)] backdrop-blur-xl"
             >
-              Ask ARIA anything ✨
+              Max AI is on standby
             </motion.div>
           )}
         </AnimatePresence>
 
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleOpen}
-          className="relative w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-[0_8px_24px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_32px_rgba(16,185,129,0.6)] transition-shadow"
+          whileHover={{ scale: 1.05, rotate: -1 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => {
+            setOpen(true);
+            setBooted(false);
+          }}
+          className="relative h-16 w-16 overflow-hidden rounded-2xl border border-fuchsia-300/40 bg-black shadow-[0_0_34px_rgba(236,72,153,0.35)]"
+          aria-label="Open Max AI"
         >
-          <Bot size={24} className="text-neutral-950 font-bold" />
-          {unread > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow-lg">
-              {unread}
-            </span>
-          )}
+          <img
+            src={MAX_AI_IDENTITY.portrait}
+            alt=""
+            className="h-full w-full object-contain p-1.5"
+          />
+          <span className="absolute inset-0 bg-cyan-400/0 transition hover:bg-cyan-400/10" />
+          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-cyan-300 shadow-[0_0_12px_#00e5ff]" />
         </motion.button>
       </div>
 
-      {/* Chat Panel */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -156,154 +267,198 @@ export default function AIChatSystem() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="fixed bottom-24 right-6 z-50 w-[360px] max-h-[560px] flex flex-col rounded-3xl overflow-hidden shadow-2xl"
-            style={{
-              background: 'rgba(8,8,12,0.97)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(24px)',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(16,185,129,0.1)',
-            }}
+            className="fixed bottom-24 right-6 z-50 flex max-h-[min(620px,calc(100vh-7rem))] w-[min(390px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#030307]/95 shadow-[0_24px_90px_rgba(0,0,0,0.75),0_0_60px_rgba(0,229,255,0.16)] backdrop-blur-2xl"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/5 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="relative w-9 h-9 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center">
-                  <Bot size={18} className="text-neutral-950" />
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#08080c] shadow-[0_0_6px_#10B981]" />
-                </div>
-                <div>
-                  <p className="text-sm font-display font-bold text-white">ARIA</p>
-                  <p className="text-[10px] font-mono text-emerald-400">Aries AI Assistant • Online</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Messages area */}
-            <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-3">
-              {messages.map(msg => (
-                <div key={msg.id} className={`flex gap-2.5 ${msg.from === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 text-[10px] font-bold ${
-                    msg.from === 'ai'
-                      ? 'bg-gradient-to-br from-emerald-500 to-cyan-500 text-neutral-950'
-                      : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                  }`}>
-                    {msg.from === 'ai' ? <Bot size={12} /> : (currentUser?.avatar?.charAt(0) || 'G')}
+            <div className="relative border-b border-cyan-300/10 p-4">
+              <div className="absolute inset-0 bg-[linear-gradient(110deg,rgba(0,229,255,0.14),transparent_42%,rgba(236,72,153,0.13))]" />
+              <div className="relative flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-fuchsia-300/30 bg-black">
+                    <img src={MAX_AI_IDENTITY.portrait} alt="" className="h-full w-full object-contain p-1" />
+                    <span className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_10px_#00e5ff]" />
                   </div>
-                  <div className={`max-w-[75%] ${msg.from === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                    <div
-                      className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
-                        msg.from === 'ai'
-                          ? 'bg-white/5 border border-white/5 text-white/80 rounded-tl-sm'
-                          : 'bg-indigo-600 text-white rounded-tr-sm'
-                      }`}
-                      dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.text) }}
-                    />
-                    <span className="text-[8px] font-mono text-white/20 px-1">
-                      {new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-
-              {/* Typing indicator */}
-              {isTyping && (
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-                    <Bot size={12} className="text-neutral-950" />
-                  </div>
-                  <div className="flex items-center gap-1 bg-white/5 border border-white/5 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                    {[0, 1, 2].map(i => (
-                      <motion.div
-                        key={i}
-                        className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-                        animate={{ opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.2 }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Escalation option */}
-              {escalated && !escalationSent && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col gap-2 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl"
-                >
-                  <div className="flex items-center gap-2 text-indigo-300 text-xs font-semibold">
-                    <AlertCircle size={14} />
-                    <span>Connect to a staff member?</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleEscalate}
-                      className="flex-grow py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5"
-                    >
-                      <ChevronRight size={12} />
-                      Route to Staff
-                    </button>
-                    <button
-                      onClick={() => { setEscalated(false); setUnknownCount(0); }}
-                      className="px-3 py-2 bg-white/5 hover:bg-white/10 text-white/50 text-xs rounded-xl transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[9px] font-mono text-white/30">
-                    <Clock size={9} />
-                    <span>Staff response: 10–15 minutes</span>
-                  </div>
-                </motion.div>
-              )}
-
-              <div ref={bottomRef} />
-            </div>
-
-            {/* Online staff indicator */}
-            {onlineStaff.length > 0 && (
-              <div className="px-4 py-2 border-t border-white/5 flex items-center gap-2 flex-shrink-0">
-                <div className="flex -space-x-1">
-                  {onlineStaff.slice(0, 3).map(s => (
-                    <div
-                      key={s.id}
-                      className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-[7px] font-bold text-indigo-300"
-                      title={s.name}
-                    >
-                      {s.avatar}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-mono text-sm font-black uppercase tracking-[0.18em] text-white">
+                        {MAX_AI_IDENTITY.name}
+                      </p>
+                      <Sparkles size={13} className="shrink-0 text-fuchsia-300" />
                     </div>
-                  ))}
+                    <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-200/70">
+                      {MAX_AI_IDENTITY.poweredBy}
+                    </p>
+                  </div>
                 </div>
-                <span className="text-[9px] font-mono text-white/30">
-                  {onlineStaff.length} staff member{onlineStaff.length > 1 ? 's' : ''} online
-                </span>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/45 transition hover:border-fuchsia-300/40 hover:text-white"
+                  aria-label="Close Max AI"
+                >
+                  <X size={16} />
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* Input area */}
-            <form onSubmit={handleSend} className="p-3 border-t border-white/5 flex gap-2 flex-shrink-0">
-              <input
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder="Ask ARIA anything..."
-                className="flex-grow bg-white/5 border border-white/5 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/40 transition"
-                disabled={isTyping}
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isTyping}
-                className="p-2.5 bg-emerald-500 text-neutral-950 rounded-xl hover:bg-emerald-400 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                <Send size={14} />
-              </button>
-            </form>
+            {!booted ? (
+              <div className="flex min-h-[430px] flex-col items-center justify-center gap-5 p-8 text-center">
+                <LottiePlayer
+                  src={MAX_AI_IDENTITY.introAnimation}
+                  className="h-32 w-32"
+                  loop
+                  ariaLabel="Max AI standby animation"
+                />
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-[0.24em] text-cyan-200">Booting Max AI</p>
+                  <p className="mt-2 text-xs leading-relaxed text-white/45">
+                    Syncing Aries AI identity, local database memory, and staff mediator routes.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-px border-b border-cyan-300/10 bg-cyan-300/10 text-[9px] font-mono uppercase tracking-[0.12em]">
+                  <div className="bg-[#05050b] px-3 py-2 text-cyan-200/70">
+                    <Radio size={10} className="mr-1 inline" />
+                    {statusText}
+                  </div>
+                  <div className="bg-[#05050b] px-3 py-2 text-fuchsia-200/70">
+                    <Database size={10} className="mr-1 inline" />
+                    local cache
+                  </div>
+                  <div className="bg-[#05050b] px-3 py-2 text-violet-200/70">
+                    <Bot size={10} className="mr-1 inline" />
+                    mediator
+                  </div>
+                </div>
+
+                <div className="flex-grow overflow-y-auto p-4">
+                  <div className="mb-4 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.04] p-3">
+                    <div className="flex items-center gap-3">
+                      <LottiePlayer
+                        src={MAX_AI_IDENTITY.cloudAnimation}
+                        className="h-10 w-10 shrink-0"
+                        ariaLabel="Local cloud storage animation"
+                      />
+                      <p className="text-[10px] leading-relaxed text-cyan-50/55">
+                        Device cloud active: conversations can escalate to staff tickets, and form data is saved in the local studio database.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {messages.map(message => (
+                      <div
+                        key={message.id}
+                        className={`flex gap-2.5 ${message.from === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                      >
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border ${
+                          message.from === 'ai'
+                            ? 'border-cyan-300/25 bg-black'
+                            : 'border-violet-300/25 bg-violet-500/10 text-violet-200'
+                        }`}
+                        >
+                          {message.from === 'ai' ? (
+                            <img src={MAX_AI_IDENTITY.portrait} alt="" className="h-full w-full object-contain p-1" />
+                          ) : (
+                            currentUser?.avatar || <User size={13} />
+                          )}
+                        </div>
+                        <div className={`flex max-w-[78%] flex-col gap-1 ${message.from === 'user' ? 'items-end' : 'items-start'}`}>
+                          <div
+                            className={`rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                              message.from === 'ai'
+                                ? 'rounded-tl-sm border border-cyan-300/10 bg-white/[0.055] text-white/82'
+                                : 'rounded-tr-sm border border-violet-300/20 bg-violet-600/75 text-white'
+                            }`}
+                          >
+                            <MarkdownLite text={message.text} />
+                          </div>
+                          <span className="px-1 font-mono text-[8px] uppercase tracking-wider text-white/20">
+                            {message.source || 'user'} / {new Date(message.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {isTyping && (
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 overflow-hidden rounded-xl border border-cyan-300/25 bg-black">
+                          <img src={MAX_AI_IDENTITY.portrait} alt="" className="h-full w-full object-contain p-1" />
+                        </div>
+                        <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-cyan-300/10 bg-white/[0.055] px-3 py-2">
+                          <LottiePlayer
+                            src={MAX_AI_IDENTITY.loadingAnimation}
+                            className="h-8 w-8"
+                            ariaLabel="Max AI loading animation"
+                          />
+                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/60">
+                            thinking
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {escalated && !escalationSent && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-2xl border border-fuchsia-300/20 bg-fuchsia-500/10 p-3"
+                      >
+                        <div className="mb-2 flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-fuchsia-200">
+                          <AlertCircle size={14} />
+                          Route to staff?
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleEscalate}
+                            className="flex flex-grow items-center justify-center gap-1.5 rounded-xl bg-fuchsia-500 px-3 py-2 text-xs font-bold text-black transition hover:bg-fuchsia-300"
+                          >
+                            <ChevronRight size={12} />
+                            Send packet
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEscalated(false);
+                              setUnknownCount(0);
+                            }}
+                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/55 transition hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <div className="mt-2 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-white/35">
+                          <Clock size={9} />
+                          {staffLabel}
+                        </div>
+                      </motion.div>
+                    )}
+
+                    <div ref={bottomRef} />
+                  </div>
+                </div>
+
+                <div className="border-t border-cyan-300/10 p-3">
+                  <form onSubmit={handleSend} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={event => setInput(event.target.value)}
+                      placeholder="Transmit to Max AI..."
+                      className="min-w-0 flex-grow rounded-xl border border-cyan-300/10 bg-white/[0.055] px-3.5 py-2.5 font-mono text-xs text-white outline-none transition placeholder:text-white/25 focus:border-cyan-300/45"
+                      disabled={isTyping}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || isTyping}
+                      className="flex items-center justify-center rounded-xl bg-cyan-300 px-3 text-black transition hover:bg-fuchsia-300 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Send message"
+                    >
+                      <Send size={15} />
+                    </button>
+                  </form>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

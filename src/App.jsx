@@ -7,6 +7,7 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import AdminPanel from './pages/AdminPanel.jsx';
 import StaffPortal from './pages/StaffPortal.jsx';
+import MaxAiDemo from './pages/MaxAiDemo.jsx';
 
 function ProtectedRoute({ children, requiredPermission }) {
   const { currentUser, isLoading, can } = useAuth();
@@ -25,6 +26,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Landing />} />
+      <Route path="/max-ai" element={<MaxAiDemo />} />
       <Route path="/login" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/dashboard" element={
         <ProtectedRoute><Dashboard /></ProtectedRoute>
