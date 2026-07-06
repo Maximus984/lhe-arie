@@ -8,7 +8,7 @@ export const SCHEDULED_RELEASES = [
     version: 'v4.1.0-Delta',
     title: 'Aries Cloud Integration & Google Calendar Sync',
     type: 'Update',
-    scheduledTime: '2026-07-06T06:00:00.000Z', // Pre-scheduled live today (UTC)
+    scheduledTime: '2026-08-06T06:00:00.000Z', // Pushed forward — no longer triggers maintenance
     maintenanceLeadMinutes: 10,
     status: 'scheduled',
     changes: [

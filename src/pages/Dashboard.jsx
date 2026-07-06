@@ -148,7 +148,9 @@ export default function App() {
     };
   }, []);
 
-  const currentTrack = activePlaylist[currentTrackIndex] || activePlaylist[0];
+  const currentTrack = (activePlaylist && activePlaylist.length > 0)
+    ? (activePlaylist[currentTrackIndex] || activePlaylist[0])
+    : null;
 
   // =====================================================
   // AUDIO CONTROLS EFFECT
@@ -234,9 +236,10 @@ export default function App() {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
       // Count track as listened after 15 seconds of playback
-      if (audioRef.current.currentTime > 15) {
+      if (audioRef.current.currentTime > 15 && currentTrack) {
         trackQuestProgress(currentTrack.id, currentTrack.artist);
       }
+
     }
   };
 
@@ -503,7 +506,7 @@ export default function App() {
       {/* Hidden Audio Controller */}
       <audio
         ref={audioRef}
-        src={currentTrack.src}
+        src={currentTrack?.src || ''}
         onTimeUpdate={handleAudioTimeUpdate}
         onLoadedMetadata={handleAudioLoadedMetadata}
         onEnded={handleAudioEnded}
@@ -549,7 +552,8 @@ export default function App() {
           </div>
           <span className="text-[10px] text-white/30 hidden md:inline uppercase tracking-wider">Mixer:</span>
           <span className="text-cyber-blue font-bold text-[10px] truncate max-w-[120px]">
-            {isPlaying ? currentTrack.title : 'OFFLINE'}
+            {isPlaying ? (currentTrack?.title || 'Loading...') : 'OFFLINE'}
+
           </span>
         </div>
 
@@ -788,8 +792,8 @@ export default function App() {
 
                   {/* Track info below canvas */}
                   <div className="flex flex-col items-center md:items-start gap-2 text-center md:text-left w-full">
-                    <h2 className="text-xl md:text-2xl font-display font-bold text-paper-white tracking-tight leading-tight">{currentTrack.title}</h2>
-                    <span className="text-sm font-mono font-semibold" style={{ color: selectedHeadliner.accentColor }}>{currentTrack.artist}</span>
+                    <h2 className="text-xl md:text-2xl font-display font-bold text-paper-white tracking-tight leading-tight">{currentTrack?.title || '—'}</h2>
+                    <span className="text-sm font-mono font-semibold" style={{ color: selectedHeadliner.accentColor }}>{currentTrack?.artist || '—'}</span>
 
                     {/* Quest progress nudge */}
                     <div className="flex items-center gap-2 mt-1 px-2.5 py-1 rounded-lg border border-white/5 bg-white/3 text-[9px] font-mono text-white/40">
@@ -799,12 +803,12 @@ export default function App() {
 
                     <div className="flex items-center gap-3 mt-1">
                       <button
-                        onClick={() => toggleFavorite(currentTrack.id)}
-                        className={`p-2 rounded-full border transition duration-300 ${favorites.includes(currentTrack.id) ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-white/5 border-white/10 text-paper-white-muted hover:border-red-500/50 hover:text-red-500'}`}
+                        onClick={() => toggleFavorite(currentTrack?.id)}
+                        className={`p-2 rounded-full border transition duration-300 ${favorites.includes(currentTrack?.id) ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-white/5 border-white/10 text-paper-white-muted hover:border-red-500/50 hover:text-red-500'}`}
                         title="Save to favorites"
                         id="btn-audio-fav"
                       >
-                        <Heart size={14} fill={favorites.includes(currentTrack.id) ? 'currentColor' : 'none'} />
+                        <Heart size={14} fill={favorites.includes(currentTrack?.id) ? 'currentColor' : 'none'} />
                       </button>
                       <span className="text-[10px] font-mono text-paper-white-dim">Track {currentTrackIndex + 1}/{activePlaylist.length} · RADIO LOOP ON</span>
                     </div>
