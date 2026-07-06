@@ -9,6 +9,9 @@ import CalendarPanel from '../components/CalendarPanel.jsx';
 import SettingsPanel from '../components/SettingsPanel.jsx';
 import BotChallenge from '../components/BotChallenge.jsx';
 import { shouldShowBotChallenge, startDiagnosticScheduler } from '../data/security.js';
+import AriesPyArcade from '../components/AriesPyArcade.jsx';
+import { AriesCloudStorageNode, AriesLiveAiFlow, DjemKaleidoscopeVisual, GameDevFallingShapes } from '../components/EcosystemAnimations.jsx';
+import { getActiveHeadliner, HEADLINERS } from '../data/headliners.js';
 import { 
   Play, 
   Pause, 
@@ -28,6 +31,7 @@ import {
   Terminal, 
   Heart, 
   X, 
+  Eye,
   ExternalLink, 
   Sliders, 
   Flame, 
@@ -36,8 +40,10 @@ import {
   ChevronRight,
   Sparkles,
   Link,
-  Laptop
+  Laptop,
+  Radio
 } from 'lucide-react';
+
 
 // Actual physical audio files from public directory
 const PLAYLIST = [
@@ -104,6 +110,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   
   // Audio Player State
+  const [selectedHeadliner, setSelectedHeadliner] = useState(HEADLINERS[0]);
+  const [activePlaylist, setActivePlaylist] = useState(HEADLINERS[0].tracks);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -129,13 +137,18 @@ export default function App() {
     };
     const botCheckTimer = setTimeout(checkBot, 8000); // Check after 8 seconds
 
+    // Set initial active headliner
+    const headliner = getActiveHeadliner();
+    setSelectedHeadliner(headliner);
+    setActivePlaylist(headliner.tracks);
+
     return () => {
       stopScheduler();
       clearTimeout(botCheckTimer);
     };
   }, []);
 
-  const currentTrack = PLAYLIST[currentTrackIndex];
+  const currentTrack = activePlaylist[currentTrackIndex] || activePlaylist[0];
 
   // =====================================================
   // AUDIO CONTROLS EFFECT
@@ -168,17 +181,62 @@ export default function App() {
     }
   };
 
+  const handleAudioEnded = () => {
+    // Full album radio loop — auto-advance and loop back to track 0
+    const nextIndex = (currentTrackIndex + 1) % activePlaylist.length;
+    setCurrentTrackIndex(nextIndex);
+    setIsPlaying(true);
+    if (nextIndex === 0) {
+      toast('🔁 Radio loop — restarting album from top!', { icon: '📻' });
+    }
+  }; 
+  
   const handleSkipForward = () => {
-    setCurrentTrackIndex((prev) => (prev + 1) % PLAYLIST.length);
+    setCurrentTrackIndex((prev) => (prev + 1) % activePlaylist.length);
   };
 
   const handleSkipBackward = () => {
-    setCurrentTrackIndex((prev) => (prev - 1 + PLAYLIST.length) % PLAYLIST.length);
+    setCurrentTrackIndex((prev) => (prev - 1 + activePlaylist.length) % activePlaylist.length);
+  };
+
+  // ── Quest progress tracker ──────────────────────────
+  const trackQuestProgress = (trackId, artist) => {
+    if (artist !== 'Ariana Grande') return;
+    try {
+      const listenedStr = localStorage.getItem('mfs_listened_tracks') || '[]';
+      const listenedList = JSON.parse(listenedStr);
+      if (!listenedList.includes(trackId)) {
+        listenedList.push(trackId);
+        localStorage.setItem('mfs_listened_tracks', JSON.stringify(listenedList));
+
+        if (listenedList.length === 1 && localStorage.getItem('mfs_unlock_saturn') !== 'true') {
+          localStorage.setItem('mfs_unlock_saturn', 'true');
+          toast.success('🔓 UNLOCKED: "Saturn Returns" track added to your lobby playlist!');
+        }
+        if (listenedList.length >= 5 && localStorage.getItem('mfs_unlock_banner') !== 'true') {
+          localStorage.setItem('mfs_unlock_banner', 'true');
+          toast.success('☀️ UNLOCKED: Once-in-a-lifetime Eternal Sunshine Sky Banner! Equip it in your profile.');
+        }
+        if (listenedList.length >= 19 && localStorage.getItem('mfs_unlock_ariana_badge') !== 'true') {
+          localStorage.setItem('mfs_unlock_ariana_badge', 'true');
+          const claimed = JSON.parse(localStorage.getItem('mfs_claimed_badges') || '[]');
+          if (!claimed.includes('legendary_ariana_sunshine')) {
+            claimed.push('legendary_ariana_sunshine');
+            localStorage.setItem('mfs_claimed_badges', JSON.stringify(claimed));
+          }
+          toast.success('👑 LEGENDARY UNLOCKED: Eternal Sunshine badge tied to your account forever!');
+        }
+      }
+    } catch (e) {}
   };
 
   const handleAudioTimeUpdate = () => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
+      // Count track as listened after 15 seconds of playback
+      if (audioRef.current.currentTime > 15) {
+        trackQuestProgress(currentTrack.id, currentTrack.artist);
+      }
     }
   };
 
@@ -188,9 +246,6 @@ export default function App() {
     }
   };
 
-  const handleAudioEnded = () => {
-    handleSkipForward();
-  };
 
   const handleScrubChange = (e) => {
     const time = parseFloat(e.target.value);
@@ -520,6 +575,14 @@ export default function App() {
             <span className="hidden md:inline">Forge Feed</span>
           </RouterLink>
 
+          <RouterLink 
+            to="/live" 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full text-xs font-semibold hover:bg-red-500/25 transition"
+          >
+            <Radio size={12} className="animate-pulse" />
+            <span className="hidden md:inline">Live Theater</span>
+          </RouterLink>
+
           <button
             onClick={() => setCalendarOpen(true)}
             className="px-3.5 py-1.5 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-full text-xs font-mono font-bold hover:bg-cyan-500/20 transition"
@@ -685,45 +748,65 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="flex flex-col md:flex-row items-center gap-8 py-4">
-                  {/* CD Cover Mockup */}
-                  <div className="relative group w-44 h-44 flex-shrink-0">
-                    <div className="absolute inset-0 bg-gradient-to-tr from-cyber-blue/20 to-moss-green/20 rounded-full blur-xl group-hover:scale-110 transition duration-500" />
-                    <div className="relative w-full h-full bg-neutral-900 border-2 border-white/10 rounded-full flex items-center justify-center shadow-2xl overflow-hidden">
-                      {/* CD Center Ring */}
-                      <div className="w-12 h-12 bg-[#050508] border border-white/20 rounded-full flex items-center justify-center z-10">
-                        <div className="w-4 h-4 bg-cyber-blue/30 rounded-full"></div>
-                      </div>
-                      
-                      {/* Grooves */}
-                      <div className="absolute inset-4 border border-white/5 rounded-full"></div>
-                      <div className="absolute inset-8 border border-white/5 rounded-full"></div>
-                      <div className="absolute inset-12 border border-white/5 rounded-full"></div>
-                      <div className="absolute inset-16 border border-white/5 rounded-full"></div>
+                {/* ── Animated Artwork Canvas ── */}
+                <div className="relative flex flex-col items-center gap-4 py-4">
+                  {/* Outer glow aura — does NOT overlap the video */}
+                  <div
+                    className="relative rounded-2xl overflow-hidden"
+                    style={{
+                      boxShadow: isPlaying
+                        ? `0 0 0 2px ${selectedHeadliner.accentColor}60, 0 0 40px ${selectedHeadliner.accentColor}50, 0 0 80px ${selectedHeadliner.accentColor}25`
+                        : '0 0 0 1px rgba(255,255,255,0.06)',
+                      transition: 'box-shadow 0.6s ease',
+                    }}
+                  >
+                    {/* Ambient corner rays — around the video, not on top */}
+                    {isPlaying && (
+                      <>
+                        <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.35 }} />
+                        <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.35 }} />
+                        <div className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.25 }} />
+                        <div className="absolute -bottom-4 -right-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.25 }} />
+                      </>
+                    )}
 
-                      {/* Rotating Vinyl Overlay */}
-                      <div className={`absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-neutral-800/80 via-neutral-950 to-neutral-950 flex flex-col justify-end items-center p-3 pb-6 text-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '8s' }}>
-                        <span className="text-[10px] font-mono text-white/40 truncate w-32 font-bold uppercase tracking-wider">{currentTrack.artist}</span>
-                      </div>
-                    </div>
+                    {/* Responsive video — mobile gets portrait canvas, desktop gets square */}
+                    <video
+                      key={selectedHeadliner.id}
+                      src={window.innerWidth < 768
+                        ? '/video/headliner_canvases/tall_animated_artwork_mobile.mp4'
+                        : '/video/headliner_canvases/square_animated_artwork_desktop.mp4'
+                      }
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="block w-full max-w-xs md:max-w-sm object-cover rounded-xl"
+                      style={{ aspectRatio: window.innerWidth < 768 ? '9/16' : '1/1', maxHeight: '280px' }}
+                    />
                   </div>
 
-                  <div className="flex-grow flex flex-col gap-4 text-center md:text-left">
-                    <div>
-                      <h2 className="text-2xl md:text-3xl font-display font-bold text-paper-white tracking-tight">{currentTrack.title}</h2>
-                      <span className="text-sm font-mono text-cyber-blue/80 font-semibold">{currentTrack.artist}</span>
+                  {/* Track info below canvas */}
+                  <div className="flex flex-col items-center md:items-start gap-2 text-center md:text-left w-full">
+                    <h2 className="text-xl md:text-2xl font-display font-bold text-paper-white tracking-tight leading-tight">{currentTrack.title}</h2>
+                    <span className="text-sm font-mono font-semibold" style={{ color: selectedHeadliner.accentColor }}>{currentTrack.artist}</span>
+
+                    {/* Quest progress nudge */}
+                    <div className="flex items-center gap-2 mt-1 px-2.5 py-1 rounded-lg border border-white/5 bg-white/3 text-[9px] font-mono text-white/40">
+                      <span>🎧</span>
+                      <span>LISTEN TO UNLOCK BADGES & BANNERS · TIED TO YOUR ACCOUNT</span>
                     </div>
 
-                    <div className="flex items-center justify-center md:justify-start gap-4">
-                      <button 
+                    <div className="flex items-center gap-3 mt-1">
+                      <button
                         onClick={() => toggleFavorite(currentTrack.id)}
-                        className={`p-2.5 rounded-full border transition duration-300 ${favorites.includes(currentTrack.id) ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-white/5 border-white/10 text-paper-white-muted hover:border-red-500/50 hover:text-red-500'}`}
-                        title="Add to Favorites"
+                        className={`p-2 rounded-full border transition duration-300 ${favorites.includes(currentTrack.id) ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-white/5 border-white/10 text-paper-white-muted hover:border-red-500/50 hover:text-red-500'}`}
+                        title="Save to favorites"
                         id="btn-audio-fav"
                       >
-                        <Heart size={16} fill={favorites.includes(currentTrack.id) ? "currentColor" : "none"} />
+                        <Heart size={14} fill={favorites.includes(currentTrack.id) ? 'currentColor' : 'none'} />
                       </button>
-                      <span className="text-xs font-mono text-paper-white-dim">ID: MFC-{currentTrack.id.toString().padStart(3, '0')}</span>
+                      <span className="text-[10px] font-mono text-paper-white-dim">Track {currentTrackIndex + 1}/{activePlaylist.length} · RADIO LOOP ON</span>
                     </div>
                   </div>
                 </div>
@@ -800,15 +883,49 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Playlist Section */}
+              {/* Playlist & Headliners Selector Section */}
               <div className="lg:col-span-5 flex flex-col gap-6">
-                <div className="glass-panel rounded-3xl p-6 flex flex-col gap-4 max-h-[460px] overflow-y-auto">
-                  <h3 className="text-base font-display font-bold uppercase tracking-wider text-paper-white-muted">
-                    MAXX FORGE PLAYLIST
+                
+                {/* Dynamic Headliners Spotlight Switcher */}
+                <div className="glass-panel rounded-3xl p-5 flex flex-col gap-3 text-left">
+                  <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                    <Sparkles size={11} className="text-cyan-400" /> Featured Headliners Spotlight
+                  </span>
+                  
+                  <div className="flex gap-2">
+                    {HEADLINERS.map(hl => (
+                      <button
+                        key={hl.id}
+                        onClick={() => {
+                          setSelectedHeadliner(hl);
+                          setActivePlaylist(hl.tracks);
+                          setCurrentTrackIndex(0);
+                          setIsPlaying(false);
+                          toast.success(`Active Spotlight: ${hl.artist}`);
+                        }}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition ${
+                          selectedHeadliner.id === hl.id
+                            ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+                            : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10'
+                        }`}
+                      >
+                        {hl.artist}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-white/40 leading-relaxed mt-1">
+                    {selectedHeadliner.desc}
+                  </p>
+                </div>
+
+                <div className="glass-panel rounded-3xl p-6 flex flex-col gap-4 max-h-[380px] overflow-y-auto">
+                  <h3 className="text-xs font-display font-bold uppercase tracking-wider text-paper-white-muted">
+                    {selectedHeadliner.album.toUpperCase()} — PLAYLIST
                   </h3>
                   
                   <div className="flex flex-col gap-2">
-                    {PLAYLIST.map((track, index) => {
+                    {activePlaylist.map((track, index) => {
                       const isCurrent = index === currentTrackIndex;
                       return (
                         <div
@@ -817,26 +934,26 @@ export default function App() {
                             setCurrentTrackIndex(index);
                             setIsPlaying(true);
                           }}
-                          className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition duration-300 ${isCurrent ? 'bg-cyber-blue/10 border-cyber-blue/40 text-cyber-blue' : 'bg-neutral-950/40 border-white/5 text-paper-white-muted hover:bg-neutral-900/60 hover:border-white/10 hover:text-paper-white'}`}
+                          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition duration-300 ${isCurrent ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-400' : 'bg-neutral-950/40 border-white/5 text-paper-white-muted hover:bg-neutral-900/60 hover:border-white/10 hover:text-paper-white'}`}
                           id={`playlist-item-${track.id}`}
                         >
                           <div className="flex items-center gap-3 truncate">
-                            <span className="text-xs font-mono w-4 text-paper-white-dim">{(index + 1).toString().padStart(2, '0')}</span>
+                            <span className="text-[10px] font-mono w-4 text-paper-white-dim">{(index + 1).toString().padStart(2, '0')}</span>
                             <div className="truncate">
-                              <p className="text-sm font-semibold truncate leading-tight">{track.title}</p>
-                              <span className="text-[10px] font-mono text-paper-white-dim uppercase">{track.artist}</span>
+                              <p className="text-xs font-semibold truncate leading-tight">{track.title}</p>
+                              <span className="text-[9px] font-mono text-paper-white-dim uppercase">{track.artist}</span>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-3">
                             {isCurrent && isPlaying ? (
                               <div className="flex items-center gap-0.5 w-3 h-2.5">
-                                <span className="w-[1.5px] bg-cyber-blue h-full origin-bottom bar-animation"></span>
-                                <span className="w-[1.5px] bg-cyber-blue h-2/3 origin-bottom bar-animation" style={{ animationDelay: '0.1s' }}></span>
-                                <span className="w-[1.5px] bg-cyber-blue h-1/2 origin-bottom bar-animation" style={{ animationDelay: '0.3s' }}></span>
+                                <span className="w-[1.5px] bg-cyan-400 h-full origin-bottom bar-animation animate-pulse"></span>
+                                <span className="w-[1.5px] bg-cyan-400 h-2/3 origin-bottom bar-animation animate-pulse" style={{ animationDelay: '0.1s' }}></span>
+                                <span className="w-[1.5px] bg-cyan-400 h-1/2 origin-bottom bar-animation animate-pulse" style={{ animationDelay: '0.3s' }}></span>
                               </div>
                             ) : (
-                              <span className="text-[10px] font-mono text-paper-white-dim">{track.duration}</span>
+                              <span className="text-[9px] font-mono text-paper-white-dim">{track.duration}</span>
                             )}
                           </div>
                         </div>
@@ -879,6 +996,7 @@ export default function App() {
               {/* Right Column: Booking Inquiry Form */}
               <div className="lg:col-span-5 flex flex-col gap-6">
                 <DjemBookingForm />
+                <DjemKaleidoscopeVisual />
               </div>
             </motion.div>
           )}
@@ -897,14 +1015,17 @@ export default function App() {
                 <AriesCountdownHeader />
               </div>
 
-              {/* Terminal Simulator Console */}
-              <div className="lg:col-span-7">
-                <AriesTerminalConsole />
+              {/* Interactive Python game runner console */}
+              <div className="lg:col-span-12">
+                <AriesPyArcade />
               </div>
 
-              {/* API Integration Details */}
+              {/* Cloud Storage & AI Flow widgets */}
+              <div className="lg:col-span-7">
+                <AriesCloudStorageNode />
+              </div>
               <div className="lg:col-span-5">
-                <AriesCodeSnippet />
+                <AriesLiveAiFlow />
               </div>
             </motion.div>
           )}
@@ -926,6 +1047,7 @@ export default function App() {
               {/* Art Grid & Media Gallery */}
               <div className="lg:col-span-5 flex flex-col gap-6">
                 <GameMediaGallery />
+                <GameDevFallingShapes />
               </div>
             </motion.div>
           )}
@@ -2060,37 +2182,155 @@ function AccountProfileModule({ favorites, setAccountOpen, setActiveSection, set
   const [discordLinked, setDiscordLinked] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
+  // Load quest states
+  const listenedStr = localStorage.getItem('mfs_listened_tracks') || '[]';
+  const listenedTracks = JSON.parse(listenedStr);
+  const isBannerUnlocked = localStorage.getItem('mfs_unlock_banner') === 'true';
+  const isBadgeUnlocked = localStorage.getItem('mfs_unlock_ariana_badge') === 'true';
+  const isSaturnUnlocked = localStorage.getItem('mfs_unlock_saturn') === 'true';
+  
+  const equippedBanner = localStorage.getItem('mfs_equipped_banner') || 'default';
+
   const triggerDiscordLink = () => {
     if (discordLinked) return;
     setSyncing(true);
-    // Mock authentication trigger
     setTimeout(() => {
       setSyncing(false);
       setDiscordLinked(true);
     }, 1500);
   };
 
+  const getBannerStyle = () => {
+    if (equippedBanner === 'eternal_sunshine') {
+      return {
+        background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.25) 0%, rgba(139, 92, 246, 0.25) 50%, rgba(6, 182, 212, 0.25) 100%)',
+        border: '1px solid rgba(192, 132, 252, 0.4)',
+        boxShadow: '0 0 15px rgba(192, 132, 252, 0.2)'
+      };
+    }
+    return { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.05)' };
+  };
+
   if (!currentUser) return null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 text-left">
       {/* Profile Header Card */}
-      <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+      <div className="flex items-center gap-4 p-4 rounded-2xl transition duration-500 relative overflow-hidden" style={getBannerStyle()}>
+        
+        {/* Animated ambient shine for banner */}
+        {equippedBanner === 'eternal_sunshine' && (
+          <div className="absolute inset-0 bg-scanlines opacity-10 pointer-events-none animate-pulse" />
+        )}
+
         <div className="relative w-16 h-16 flex-shrink-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-moss-green to-cyber-blue rounded-full animate-pulse-slow" />
-          <div className="relative w-full h-full bg-neutral-950 rounded-full border border-white/20 flex items-center justify-center font-display font-extrabold text-lg text-moss-green shadow-inner">
+          <div className="absolute inset-0 bg-gradient-to-br from-pink-500 to-indigo-500 rounded-full animate-pulse-slow" />
+          <div className="relative w-full h-full bg-neutral-950 rounded-full border border-white/20 flex items-center justify-center font-display font-extrabold text-lg text-pink-400 shadow-inner">
             {currentUser.avatar}
           </div>
-          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-moss-green border-2 border-obsidian-surface shadow-[0_0_5px_#10B981]" title="Node status active"></span>
+          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-pink-500 border-2 border-obsidian-surface shadow-[0_0_5px_#EC4899]" title="Node status active"></span>
         </div>
 
         <div className="flex-grow">
           <h3 className="text-base font-display font-bold text-paper-white">{currentUser.name}</h3>
           <span className="text-[10px] font-mono text-paper-white-muted uppercase truncate block max-w-[200px]">{currentUser.email}</span>
           
-          <div className="flex items-center gap-1.5 mt-2 bg-moss-green/10 border border-moss-green/20 rounded px-2 py-0.5 w-max">
-            <Sparkles size={10} className="text-moss-green" />
-            <span className="text-[8px] font-mono text-moss-green font-bold uppercase tracking-wider">{currentUser.badge}</span>
+          <div className="flex items-center gap-1.5 mt-2 bg-pink-500/10 border border-pink-500/20 rounded px-2 py-0.5 w-max">
+            <Sparkles size={10} className="text-pink-400" />
+            <span className="text-[8px] font-mono text-pink-400 font-bold uppercase tracking-wider">
+              {isBadgeUnlocked ? '☀️ ETERNAL SUNSHINE' : currentUser.badge}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Banner Equip customization */}
+      {isBannerUnlocked && (
+        <div className="bg-white/3 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 font-mono text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] text-white/40 uppercase">Profile Banners ({equippedBanner === 'eternal_sunshine' ? '1 Equipped' : '0 Equipped'})</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                localStorage.setItem('mfs_equipped_banner', equippedBanner === 'eternal_sunshine' ? 'default' : 'eternal_sunshine');
+                toast.success(equippedBanner === 'eternal_sunshine' ? 'Banner unequipped' : 'Eternal Sunshine Sky Banner equipped!');
+                window.dispatchEvent(new Event('storage'));
+              }}
+              className={`flex-grow py-2 px-3 text-[10px] font-bold rounded-xl border transition ${
+                equippedBanner === 'eternal_sunshine'
+                  ? 'bg-pink-500/10 border-pink-500/30 text-pink-400'
+                  : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+              }`}
+            >
+              {equippedBanner === 'eternal_sunshine' ? 'UNEQUIP SUNSHINE SKY' : 'EQUIP ETERNAL SUNSHINE SKY'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lobby Achievement Quest Path ("Walker") */}
+      <div className="flex flex-col gap-3 bg-neutral-950/60 p-5 rounded-2xl border border-white/5 font-mono text-xs">
+        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+          <span className="text-[10px] text-paper-white-dim uppercase font-bold tracking-wider">Lobby Quest Walker</span>
+          <span className="text-[9px] text-cyan-400 font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded">Spotlight Event</span>
+        </div>
+
+        <div className="flex flex-col gap-4 mt-2">
+          {/* Milestone 1 */}
+          <div className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
+                listenedTracks.length >= 1 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
+              }`}>
+                {listenedTracks.length >= 1 ? '✓' : '1'}
+              </div>
+              <div className={`w-0.5 h-6 bg-white/5 ${listenedTracks.length >= 1 ? 'bg-cyan-400/20' : ''}`} />
+            </div>
+            <div className="flex-grow text-left">
+              <p className="text-xs font-bold text-white leading-tight">First Audition</p>
+              <p className="text-[9px] text-white/30 mt-0.5">Unlocks "Saturn Returns" track in lobby catalog.</p>
+              <span className="text-[9px] text-cyan-400 font-bold block mt-1">
+                {listenedTracks.length >= 1 ? 'UNLOCKED' : 'LOCKED'}
+              </span>
+            </div>
+          </div>
+
+          {/* Milestone 2 */}
+          <div className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
+                listenedTracks.length >= 5 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
+              }`}>
+                {listenedTracks.length >= 5 ? '✓' : '2'}
+              </div>
+              <div className={`w-0.5 h-6 bg-white/5 ${listenedTracks.length >= 5 ? 'bg-cyan-400/20' : ''}`} />
+            </div>
+            <div className="flex-grow text-left">
+              <p className="text-xs font-bold text-white leading-tight">Enthusiast Sync</p>
+              <p className="text-[9px] text-white/30 mt-0.5">Unlocks Profile Banner customizable overlay.</p>
+              <span className="text-[9px] text-cyan-400 font-bold block mt-1">
+                {listenedTracks.length >= 5 ? 'UNLOCKED' : `PROGRESS: ${Math.min(5, listenedTracks.length)}/5`}
+              </span>
+            </div>
+          </div>
+
+          {/* Milestone 3 */}
+          <div className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
+                listenedTracks.length >= 19 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
+              }`}>
+                {listenedTracks.length >= 19 ? '✓' : '3'}
+              </div>
+            </div>
+            <div className="flex-grow text-left">
+              <p className="text-xs font-bold text-white leading-tight">Album Loop Completion</p>
+              <p className="text-[9px] text-white/30 mt-0.5">Unlocks Legendary Badge tied to your account profile.</p>
+              <span className="text-[9px] text-cyan-400 font-bold block mt-1">
+                {listenedTracks.length >= 19 ? 'UNLOCKED' : `PROGRESS: ${listenedTracks.length}/19`}
+              </span>
+            </div>
           </div>
         </div>
       </div>

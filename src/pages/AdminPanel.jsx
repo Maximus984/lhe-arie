@@ -7,6 +7,28 @@ import { runSystemDiagnostics } from '../data/security.js';
 import { isMaintenanceMode, setMaintenanceMode, getMaintenanceMessage, setMaintenanceMessage } from '../data/analytics.js';
 import toast from 'react-hot-toast';
 
+const ALL_SYSTEM_PERMISSIONS = [
+  { id: 'view_dashboard', label: 'View Dashboard Portal', cat: 'General' },
+  { id: 'view_admin', label: 'Access Founder Admin Panel', cat: 'Admin Override' },
+  { id: 'view_staff_portal', label: 'Access Staff Work Portal', cat: 'Admin Override' },
+  { id: 'manage_users', label: 'Create/Remove Roster Users', cat: 'Admin Override' },
+  { id: 'view_ip_logs', label: 'Audit Security & Session Logs', cat: 'Admin Override' },
+  { id: 'manage_forms', label: 'Review Booking/Collab Inboxes', cat: 'Admin Override' },
+  { id: 'view_calendar', label: 'Access Studio calendar', cat: 'Calendar' },
+  { id: 'edit_calendar', label: 'Add/Edit Calendar Events', cat: 'Calendar' },
+  { id: 'delete_calendar_events', label: 'Delete Calendar Events', cat: 'Calendar' },
+  { id: 'use_workspace', label: 'Access Workspace Apps', cat: 'Workspace' },
+  { id: 'create_docs', label: 'Create/Edit Workspace Docs', cat: 'Workspace' },
+  { id: 'delete_docs', label: 'Delete Workspace Docs', cat: 'Workspace' },
+  { id: 'manage_vault', label: 'Manage Vault & Storage files', cat: 'Workspace' },
+  { id: 'manage_live_stream', label: 'OBS/TikTok Studio controls', cat: 'Live Stream' },
+  { id: 'view_feed', label: 'Access community chat feed', cat: 'Feed/Chat' },
+  { id: 'post_feed', label: 'Send messages to chat', cat: 'Feed/Chat' },
+  { id: 'react_feed', label: 'Add emoji reactions to feed', cat: 'Feed/Chat' },
+  { id: 'moderate_feed', label: 'Moderate chat feed (Delete posts)', cat: 'Feed/Chat' },
+  { id: 'manage_channels', label: 'Manage Chat channels', cat: 'Feed/Chat' }
+];
+
 export default function AdminPanel() {
   const { sessionLogs, formSubmissions, failedAttempts, updateSubmission, getSimulatedIP } = useAuth();
   const navigate = useNavigate();
@@ -20,6 +42,14 @@ export default function AdminPanel() {
   const [newStaffDept, setNewStaffDept] = useState('Technology');
   const [newStaffRole, setNewStaffRole] = useState('staff');
 
+  // Custom Roles & Permissions States (Discord-style)
+  const [customRoles, setCustomRoles] = useState({});
+  const [roleKey, setRoleKey] = useState('');
+  const [roleName, setRoleName] = useState('');
+  const [roleColor, setRoleColor] = useState('#6366F1');
+  const [roleBadge, setRoleBadge] = useState('🛡️ Mod');
+  const [rolePerms, setRolePerms] = useState([]);
+
   // Maintenance States
   const [maintenance, setMaintenance] = useState(isMaintenanceMode());
   const [maintMsg, setMaintMsg] = useState(getMaintenanceMessage());
@@ -27,13 +57,17 @@ export default function AdminPanel() {
   // Diagnostics States
   const [lastReport, setLastReport] = useState(null);
 
-  // Sync users
   const refreshUsers = () => {
     setUsers(JSON.parse(localStorage.getItem('mfs_users') || '[]'));
   };
 
+  const refreshRoles = () => {
+    setCustomRoles(JSON.parse(localStorage.getItem('mfs_custom_roles') || '{}'));
+  };
+
   useEffect(() => {
     refreshUsers();
+    refreshRoles();
   }, []);
 
   const handleUpdateStatus = (id, newStatus) => {
@@ -101,6 +135,70 @@ export default function AdminPanel() {
     localStorage.setItem('mfs_users', JSON.stringify(filtered));
     refreshUsers();
     toast.success(`Removed and Banned account: ${name}`);
+  };
+
+  // Create / Update Role (Discord-style)
+  const handleSaveRole = (e) => {
+    e.preventDefault();
+    if (!roleKey.trim() || !roleName.trim()) {
+      return toast.error('Role Key and Display Name are required.');
+    }
+    
+    const key = roleKey.toLowerCase().replace(/\s+/g, '-');
+    if (key === 'founder') {
+      return toast.error('Founder role permissions cannot be edited.');
+    }
+
+    const existingRoles = JSON.parse(localStorage.getItem('mfs_custom_roles') || '{}');
+    
+    existingRoles[key] = {
+      name: roleName.trim(),
+      color: roleColor,
+      badge: roleBadge.trim(),
+      permissions: rolePerms
+    };
+    
+    localStorage.setItem('mfs_custom_roles', JSON.stringify(existingRoles));
+    refreshRoles();
+    
+    // Clear inputs
+    setRoleKey('');
+    setRoleName('');
+    setRoleBadge('🛡️ Mod');
+    setRolePerms([]);
+    toast.success(`Role "${roleName}" has been synchronized.`);
+  };
+
+  // Toggle permission checkbox
+  const handleTogglePerm = (permId) => {
+    if (rolePerms.includes(permId)) {
+      setRolePerms(rolePerms.filter(p => p !== permId));
+    } else {
+      setRolePerms([...rolePerms, permId]);
+    }
+  };
+
+  // Assign user to role
+  const handleAssignUserRole = (userId, newRole) => {
+    if (userId === 'usr_founder_001') {
+      return toast.error('Founder Maximus role is permanent.');
+    }
+    const currentUsers = JSON.parse(localStorage.getItem('mfs_users') || '[]');
+    const updated = currentUsers.map(u => {
+      if (u.id === userId) {
+        const savedRoles = JSON.parse(localStorage.getItem('mfs_custom_roles') || '{}');
+        const rInfo = savedRoles[newRole] || { badge: newRole.toUpperCase() };
+        return {
+          ...u,
+          role: newRole,
+          badge: rInfo.badge
+        };
+      }
+      return u;
+    });
+    localStorage.setItem('mfs_users', JSON.stringify(updated));
+    refreshUsers();
+    toast.success('Roster user permissions updated.');
   };
 
   // Maintenance Toggle
@@ -178,6 +276,7 @@ export default function AdminPanel() {
           {[
             { id: 'telemetry', label: 'Ecosystem Telemetry', icon: <Server size={14} /> },
             { id: 'users', label: 'Roster & User Directory', icon: <Users size={14} /> },
+            { id: 'roles', label: 'Roles & Permissions', icon: <Key size={14} /> },
             { id: 'logs', label: 'Session IP Logs', icon: <Shield size={14} /> },
             { id: 'forms', label: 'Form Inboxes', icon: <FileText size={14} /> },
           ].map(tab => (
@@ -390,10 +489,11 @@ export default function AdminPanel() {
                   <select
                     value={newStaffRole}
                     onChange={e => setNewStaffRole(e.target.value)}
-                    className="px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl text-xs focus:outline-none"
+                    className="px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl text-xs focus:outline-none text-white"
                   >
-                    <option value="staff">Staff (Portal Access)</option>
-                    <option value="member">Member (View Only)</option>
+                    {Object.keys(customRoles).map(rk => (
+                      <option key={rk} value={rk}>{customRoles[rk].name}</option>
+                    ))}
                   </select>
                 </div>
                 <button type="submit" className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl text-xs font-bold transition">
@@ -401,7 +501,7 @@ export default function AdminPanel() {
                 </button>
               </form>
             </div>
-
+ 
             {/* User List (8 cols) */}
             <div className="lg:col-span-8 bg-white/3 border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
               <h3 className="text-sm font-display font-bold uppercase tracking-wider text-left">Ecosystem Directory</h3>
@@ -417,37 +517,49 @@ export default function AdminPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map(u => (
-                      <tr key={u.id} className="border-b border-white/5 text-white/70">
-                        <td className="py-3 font-semibold flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center font-bold text-[10px] text-indigo-400">
-                            {u.avatar}
-                          </div>
-                          {u.name}
-                        </td>
-                        <td className="py-3 text-white/40">{u.email}</td>
-                        <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                            u.role === 'founder' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
-                            u.role === 'staff' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' :
-                            'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                          }`}>
-                            {u.role.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="py-3 text-white/40">{u.department || '—'}</td>
-                        <td className="py-3 text-right">
-                          <button
-                            onClick={() => handleBanUser(u.id, u.name)}
-                            disabled={u.role === 'founder'}
-                            className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Ban / Remove User"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {users.map(u => {
+                      const rInfo = customRoles[u.role] || { name: u.role, color: '#10B981', badge: u.role };
+                      return (
+                        <tr key={u.id} className="border-b border-white/5 text-white/70">
+                          <td className="py-3 font-semibold flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center font-bold text-[10px] text-indigo-400">
+                              {u.avatar}
+                            </div>
+                            {u.name}
+                          </td>
+                          <td className="py-3 text-white/40">{u.email}</td>
+                          <td className="py-3">
+                            {u.role === 'founder' ? (
+                              <span className="px-2 py-0.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded text-[9px] font-bold">
+                                FOUNDER
+                              </span>
+                            ) : (
+                              <select
+                                value={u.role}
+                                onChange={(e) => handleAssignUserRole(u.id, e.target.value)}
+                                className="px-2 py-0.5 bg-neutral-900 border border-white/10 rounded text-[10px] focus:outline-none font-bold uppercase"
+                                style={{ color: rInfo.color }}
+                              >
+                                {Object.keys(customRoles).map(rk => (
+                                  <option key={rk} value={rk}>{customRoles[rk].name.toUpperCase()}</option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td className="py-3 text-white/40">{u.department || '—'}</td>
+                          <td className="py-3 text-right">
+                            <button
+                              onClick={() => handleBanUser(u.id, u.name)}
+                              disabled={u.role === 'founder'}
+                              className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Ban / Remove User"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -547,7 +659,157 @@ export default function AdminPanel() {
             )}
           </div>
         )}
-        
+
+        {/* Tab: Roles Manager (Discord style) */}
+        {activeTab === 'roles' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-left font-mono">
+            {/* Left Column: Role Creator Form */}
+            <div className="lg:col-span-5 bg-white/3 border border-white/5 rounded-2xl p-6 flex flex-col gap-4 self-start">
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Key size={14} className="text-indigo-400" />
+                  Role Editor Sandbox
+                </h3>
+                <p className="text-[10px] text-white/30 mt-1">Configure role badges, custom styling, and bind permission scopes.</p>
+              </div>
+
+              <form onSubmit={handleSaveRole} className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-white/40 uppercase">Role Key (ID)</label>
+                    <input
+                      type="text"
+                      value={roleKey}
+                      onChange={e => setRoleKey(e.target.value)}
+                      placeholder="e.g. moderator"
+                      className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-white/40 uppercase">Display Name</label>
+                    <input
+                      type="text"
+                      value={roleName}
+                      onChange={e => setRoleName(e.target.value)}
+                      placeholder="e.g. Moderator"
+                      className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-white/40 uppercase">Badge Emoji/Prefix</label>
+                    <input
+                      type="text"
+                      value={roleBadge}
+                      onChange={e => setRoleBadge(e.target.value)}
+                      placeholder="e.g. 🛡️ Mod"
+                      className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-white/40 uppercase">Tag Color (Hex)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={roleColor}
+                        onChange={e => setRoleColor(e.target.value)}
+                        className="w-8 h-8 rounded bg-transparent border-0 cursor-pointer self-center"
+                      />
+                      <input
+                        type="text"
+                        value={roleColor}
+                        onChange={e => setRoleColor(e.target.value)}
+                        placeholder="#A855F7"
+                        className="flex-grow px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Permissions checklist grouped by category */}
+                <div className="flex flex-col gap-2 mt-2">
+                  <span className="text-[9px] text-white/40 uppercase">Permissions checklist</span>
+                  <div className="max-h-[220px] overflow-y-auto border border-white/5 rounded-xl p-3 bg-neutral-950/60 flex flex-col gap-3">
+                    {['General', 'Admin Override', 'Calendar', 'Workspace', 'Live Stream', 'Feed/Chat'].map(cat => (
+                      <div key={cat} className="flex flex-col gap-1">
+                        <span className="text-[9px] text-indigo-400 font-bold uppercase border-b border-white/5 pb-0.5">{cat}</span>
+                        {ALL_SYSTEM_PERMISSIONS.filter(p => p.cat === cat).map(p => (
+                          <label key={p.id} className="flex items-start gap-2 text-[11px] text-white/70 py-0.5 cursor-pointer hover:text-white transition">
+                            <input
+                              type="checkbox"
+                              checked={rolePerms.includes(p.id)}
+                              onChange={() => handleTogglePerm(p.id)}
+                              className="rounded border-white/10 text-indigo-500 bg-neutral-900 focus:ring-0 mt-0.5"
+                            />
+                            <span>{p.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl text-xs font-bold transition">
+                  SYNCHRONIZE ROLE SETTINGS
+                </button>
+              </form>
+            </div>
+
+            {/* Right Column: Roles Registry */}
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              {/* Roles registry list */}
+              <div className="bg-white/3 border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Roles Registry</h3>
+                <div className="flex flex-col gap-3">
+                  {Object.keys(customRoles).map(rk => {
+                    const r = customRoles[rk];
+                    const isSystemRole = ['founder', 'staff', 'member', 'guest'].includes(rk);
+                    return (
+                      <div key={rk} className="p-4 rounded-xl border border-white/5 bg-white/2 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color }} />
+                            <span className="text-xs font-bold text-white">{r.name}</span>
+                            <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded text-white/50 border border-white/5">{r.badge}</span>
+                          </div>
+                          {!isSystemRole && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = JSON.parse(localStorage.getItem('mfs_custom_roles') || '{}');
+                                delete current[rk];
+                                localStorage.setItem('mfs_custom_roles', JSON.stringify(current));
+                                refreshRoles();
+                                toast.success(`Purged custom role: ${rk}`);
+                              }}
+                              className="text-[10px] text-red-400 hover:underline"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {r.permissions.map(p => (
+                            <span key={p} className="text-[8px] bg-white/5 text-white/60 px-1.5 py-0.5 rounded border border-white/5">
+                              {p}
+                            </span>
+                          ))}
+                          {r.permissions.length === 0 && (
+                            <span className="text-[8px] text-white/20 italic">No permissions bound.</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

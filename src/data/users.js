@@ -6,6 +6,7 @@ export const ROLES = {
   FOUNDER: 'founder',
   STAFF: 'staff',
   MEMBER: 'member',
+  GUEST: 'guest',
 };
 
 export const PERMISSIONS = {
@@ -63,13 +64,52 @@ export const PERMISSIONS = {
     // Workspace suite (read-only)
     'view_docs', 'view_drive', 'view_slides', 'view_vault',
     // Community feed
-    'view_feed', 'react_feed',
+    'view_feed', 'react_feed', 'post_feed',
     // Settings
     'view_settings', 'edit_profile',
+    // Collectibles
+    'claim_collectible', 'view_collectibles',
+  ],
+  guest: [
+    // Very limited access — browse only
+    'view_dashboard',
+    'view_public_events',
+    'use_ai_chat',
+    // View feed, no posting
+    'view_feed',
+    // Collectibles — one free starter
+    'view_collectibles', 'claim_collectible',
   ],
 };
 
+export const initializeRoles = () => {
+  const existing = localStorage.getItem('mfs_custom_roles');
+  if (!existing) {
+    const defaults = {
+      founder: { name: 'Founder', color: '#EF4444', badge: '🔥 Founder', permissions: PERMISSIONS.founder },
+      staff: { name: 'Staff', color: '#EC4899', badge: '⚡ Staff', permissions: PERMISSIONS.staff },
+      member: { name: 'Member', color: '#10B981', badge: '👤 Member', permissions: PERMISSIONS.member },
+      guest: { name: 'Guest', color: '#9CA3AF', badge: '🌐 Guest', permissions: PERMISSIONS.guest }
+    };
+    localStorage.setItem('mfs_custom_roles', JSON.stringify(defaults));
+  }
+};
+
 export const hasPermission = (role, permission) => {
+  // Founder override - has all permissions
+  if (role === 'founder') return true;
+
+  // Check dynamic role permissions from localStorage
+  try {
+    const customRoles = JSON.parse(localStorage.getItem('mfs_custom_roles') || '{}');
+    if (customRoles[role]) {
+      return customRoles[role].permissions.includes(permission);
+    }
+  } catch (e) {
+    console.error('Failed parsing custom roles', e);
+  }
+
+  // Fallback to static PERMISSIONS definitions
   return PERMISSIONS[role]?.includes(permission) ?? false;
 };
 
@@ -123,6 +163,7 @@ export const SEED_USERS = [
 ];
 
 export const initializeUsers = () => {
+  initializeRoles();
   const existing = localStorage.getItem('mfs_users');
   if (!existing) {
     localStorage.setItem('mfs_users', JSON.stringify(SEED_USERS));

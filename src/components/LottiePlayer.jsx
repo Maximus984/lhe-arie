@@ -8,6 +8,7 @@ export default function LottiePlayer({
   autoplay = true,
   renderer = 'svg',
   ariaLabel = 'Animated graphic',
+  assetsPath = undefined, // Add assetsPath prop
 }) {
   const containerRef = useRef(null);
 
@@ -20,6 +21,7 @@ export default function LottiePlayer({
       loop,
       autoplay,
       path: src,
+      assetsPath, // Pass assetsPath to lottie-web
       rendererSettings: {
         preserveAspectRatio: 'xMidYMid meet',
         progressiveLoad: true,
@@ -27,7 +29,7 @@ export default function LottiePlayer({
     });
 
     return () => animation.destroy();
-  }, [autoplay, loop, renderer, src]);
+  }, [autoplay, loop, renderer, src, assetsPath]);
 
   return (
     <div

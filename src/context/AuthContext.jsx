@@ -1,12 +1,60 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { getUsers, saveUsers, getUserByEmail, initializeUsers, hasPermission } from '../data/users.js';
+import { getUsers, saveUsers, getUserByEmail, initializeUsers, hasPermission, ROLES } from '../data/users.js';
 import { initializeFeed } from '../data/feed.js';
 
 const AuthContext = createContext(null);
 
 const MAX_ATTEMPTS = 5;
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+const DEFAULT_CALENDAR_EVENTS = [
+  {
+    id: 'evt_xmas_2026',
+    title: '🎄 Maxx Forge Christmas Festival',
+    description: 'Special profile gift claiming open! Festive decorations, holiday music catalog rollout, and community gift drop.',
+    date: '2026-12-25',
+    time: '12:00',
+    location: 'Maxx Forge Central Hub',
+    division: 'events'
+  },
+  {
+    id: 'evt_newyear_2026',
+    title: '🎆 Forge New Year Midnight DJ Set',
+    description: 'Live virtual music performance by DJ Em synchronized with digital fireworks and custom TouchDesigner visuals.',
+    date: '2026-12-31',
+    time: '23:30',
+    location: 'The Bio Forge Stage',
+    division: 'records'
+  },
+  {
+    id: 'evt_halloween_2026',
+    title: '🎃 Bio-Skull Unity Horror Hunt',
+    description: 'Live play-test tournament of the new Unity survival horror concept game. Collect game trophies and win epic badges.',
+    date: '2026-10-31',
+    time: '18:00',
+    location: 'Unity Sandbox Room',
+    division: 'gamedev'
+  },
+  {
+    id: 'evt_aries_v4_2026',
+    title: '🤖 Aries AI Core v4.0 Release',
+    description: 'Official rollout of the Aries OS client software, interactive python game runner, and local AI sandbox v4.0.',
+    date: '2026-09-15',
+    time: '10:00',
+    location: 'Aries Lab Node',
+    division: 'aries'
+  },
+  {
+    id: 'evt_prime_catalog_2026',
+    title: '🎵 Prime Records Catalog Sweep',
+    description: 'Distribution sweep of 12+ new electronic master mixes across BandLab, SoundCloud, and streaming services.',
+    date: '2026-09-01',
+    time: '09:00',
+    location: 'SoundCloud / BandLab',
+    division: 'records'
+  }
+];
 
 // Simulated IP from browser fingerprint
 const getSimulatedIP = () => {
@@ -54,7 +102,11 @@ export function AuthProvider({ children }) {
     const logs = JSON.parse(localStorage.getItem('mfs_session_logs') || '[]');
     const tickets = JSON.parse(localStorage.getItem('mfs_chat_tickets') || '[]');
     const submissions = JSON.parse(localStorage.getItem('mfs_form_submissions') || '[]');
-    const events = JSON.parse(localStorage.getItem('mfs_calendar_events') || '[]');
+    let events = JSON.parse(localStorage.getItem('mfs_calendar_events') || '[]');
+    if (events.length === 0) {
+      events = DEFAULT_CALENDAR_EVENTS;
+      localStorage.setItem('mfs_calendar_events', JSON.stringify(events));
+    }
     const attempts = JSON.parse(localStorage.getItem('mfs_failed_attempts') || '{}');
 
     setSessionLogs(logs);
@@ -140,31 +192,71 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
   }, [currentUser]);
 
-  const registerMember = useCallback(async (name, email, password) => {
+  // ---- Full account registration ----
+  const registerMember = useCallback(async (name, email, password, avatarEmoji = null) => {
+    if (!name || name.trim().length < 2) return { success: false, error: 'Display name must be at least 2 characters.' };
+    if (!email || !email.includes('@')) return { success: false, error: 'Please enter a valid email address.' };
+    if (!password || password.length < 6) return { success: false, error: 'Password must be at least 6 characters.' };
+
     const existing = getUserByEmail(email);
     if (existing) return { success: false, error: 'An account with this email already exists.' };
 
-    const { v4: uuidv4_inner } = await import('uuid');
+    await new Promise(r => setTimeout(r, 500)); // Simulate network delay
+
     const newUser = {
-      id: `usr_${uuidv4_inner()}`,
-      name,
-      displayName: name,
-      email,
+      id: `usr_${uuidv4()}`,
+      name: name.trim(),
+      displayName: name.trim(),
+      email: email.toLowerCase().trim(),
       password,
-      role: 'member',
-      avatar: name.substring(0, 2).toUpperCase(),
+      role: ROLES.MEMBER,
+      avatar: avatarEmoji || name.trim().substring(0, 2).toUpperCase(),
+      avatarIsEmoji: !!avatarEmoji,
       bio: '',
       joinedAt: new Date().toISOString(),
       isOnline: false,
       department: 'Community',
       badge: '⭐ Member',
+      isGuest: false,
     };
 
     const users = getUsers();
     saveUsers([...users, newUser]);
-    addSessionLog({ action: 'REGISTER', email, userId: newUser.id });
+    addSessionLog({ action: 'REGISTER', email: newUser.email, userId: newUser.id });
 
-    return { success: true };
+    // Auto-login after registration
+    const session = { userId: newUser.id, loginTime: Date.now() };
+    localStorage.setItem('mfs_session', JSON.stringify(session));
+    setCurrentUser(newUser);
+    markUserOnline(newUser.id);
+
+    return { success: true, user: newUser };
+  }, []);
+
+  // ---- Guest session ----
+  const guestLogin = useCallback(() => {
+    const guestNum = Math.floor(1000 + Math.random() * 8999);
+    const guestUser = {
+      id: `guest_${uuidv4()}`,
+      name: `ForgeGuest#${guestNum}`,
+      displayName: `ForgeGuest#${guestNum}`,
+      email: `guest_${guestNum}@forge.temp`,
+      password: '',
+      role: ROLES.GUEST,
+      avatar: '👤',
+      avatarIsEmoji: true,
+      bio: 'Visiting the Forge as a guest.',
+      joinedAt: new Date().toISOString(),
+      isOnline: true,
+      department: 'Guest',
+      badge: '🌐 Guest',
+      isGuest: true,
+    };
+    // Guests use session storage only (not persisted to users list)
+    sessionStorage.setItem('mfs_guest_session', JSON.stringify(guestUser));
+    setCurrentUser(guestUser);
+    addSessionLog({ action: 'GUEST_LOGIN', userId: guestUser.id });
+    return { success: true, user: guestUser };
   }, []);
 
   // Form submissions
@@ -224,16 +316,17 @@ export function AuthProvider({ children }) {
   };
 
   const can = (permission) => hasPermission(currentUser?.role, permission);
+  const isGuest = currentUser?.isGuest === true;
 
   const value = {
     currentUser, isLoading,
     sessionLogs, failedAttempts, onlineStaff,
     chatTickets, formSubmissions, calendarEvents,
-    login, logout, registerMember,
+    login, logout, registerMember, guestLogin,
     submitForm, updateSubmission,
     addCalendarEvent, deleteCalendarEvent,
     createChatTicket,
-    can,
+    can, isGuest,
     getSimulatedIP,
   };
 

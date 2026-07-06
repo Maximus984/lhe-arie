@@ -21,15 +21,16 @@ export default function LiveViewerCounter({ style = 'badge', className = '' }) {
     return stop;
   }, []);
 
+  useEffect(() => {
+    if (count === null) return;
+    const t = setTimeout(() => setPrevCount(count), 2000);
+    return () => clearTimeout(t);
+  }, [count]);
+
   if (count === null) return null;
 
   const formatted = count.toLocaleString();
   const trending = prevCount !== null && count > prevCount;
-
-  useEffect(() => {
-    const t = setTimeout(() => setPrevCount(count), 2000);
-    return () => clearTimeout(t);
-  }, [count]);
 
   if (style === 'minimal') {
     return (

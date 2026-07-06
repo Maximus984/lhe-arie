@@ -14,6 +14,15 @@ const EVENT_COLORS = {
   'Personal': '#EC4899',
 };
 
+const makeGoogleCalendarLink = (ev) => {
+  const title = encodeURIComponent(ev.title);
+  const dateClean = ev.date.replace(/-/g, '');
+  const dates = `${dateClean}/${dateClean}`;
+  const details = encodeURIComponent(ev.description || ev.notes || 'Maxx Forge Studio Event');
+  const location = encodeURIComponent(ev.location || 'Maxx Forge Central Hub');
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
+};
+
 function AddEventModal({ date, onSave, onClose }) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('Studio Session');
@@ -235,11 +244,22 @@ export default function CalendarPanel({ isOpen, onClose }) {
                             <p className="text-[10px] font-mono text-white/30">{ev.type}{ev.notes ? ` · ${ev.notes}` : ''}</p>
                           </div>
                         </div>
-                        {canEdit && (
-                          <button onClick={() => { deleteCalendarEvent(ev.id); toast.success('Event removed'); }} className="p-1.5 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
-                            <Trash2 size={13} />
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <a
+                            href={makeGoogleCalendarLink(ev)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-mono text-cyan-400 hover:bg-cyan-500/20 transition decoration-none font-bold"
+                            title="Sync to Google Calendar"
+                          >
+                            + Google Calendar
+                          </a>
+                          {canEdit && (
+                            <button onClick={() => { deleteCalendarEvent(ev.id); toast.success('Event removed'); }} className="p-1.5 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileText, Send, Check, Calendar, Music, Zap, Cpu, Mail, User, ChevronRight } from 'lucide-react';
+import { X, FileText, Send, Check, Calendar, Music, Zap, Cpu, Mail, User, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,8 @@ const FORM_TYPES = [
   { id: 'tech', label: 'Tech Consultation', icon: <Cpu size={16} />, color: '#6366F1', desc: 'Aries AI integration, software builds & API development' },
   { id: 'contact', label: 'General Contact', icon: <Mail size={16} />, color: '#F59E0B', desc: 'Press, partnerships, media & general inquiries' },
   { id: 'vacation', label: 'Time-Off Request', icon: <Calendar size={16} />, color: '#EC4899', desc: 'Staff vacation & schedule adjustment requests (Staff only)' },
+  { id: 'staff_report', label: 'Staff Incident Report', icon: <AlertTriangle size={16} />, color: '#EF4444', desc: 'Log system diagnostics, security sweep warnings & node failures (Staff only)' },
+  { id: 'account_mgmt', label: 'Account Management', icon: <User size={16} />, color: '#10B981', desc: 'Request credentials reset, role upgrades & telemetry key access' },
 ];
 
 function BookingForm({ onSubmit, loading }) {
@@ -134,6 +136,69 @@ function VacationForm({ onSubmit, loading }) {
   );
 }
 
+function StaffReportForm({ onSubmit, loading }) {
+  const [data, setData] = useState({ name: '', email: '', severity: 'Medium', division: 'System Core', desc: '', steps: '' });
+  const set = k => e => setData(d => ({ ...d, [k]: e.target.value }));
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-300 font-mono">
+        ⚠️ This incident form submits direct telemetry tickets to the technical triage team.
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Staff Member Name" value={data.name} onChange={set('name')} placeholder="Your name" required />
+        <Field label="Telemetry Email" type="email" value={data.email} onChange={set('email')} placeholder="staff@company.com" required />
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-mono text-white/40 uppercase font-bold tracking-wider">Severity Level</label>
+          <select value={data.severity} onChange={set('severity')} className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white/80 focus:outline-none focus:border-red-500/50 transition">
+            <option value="Low">Low - Cosmetic/Typos</option>
+            <option value="Medium">Medium - Functionality bug</option>
+            <option value="Critical">Critical - Performance crash</option>
+            <option value="Emergency">Emergency - System downtime</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-mono text-white/40 uppercase font-bold tracking-wider">Impacted Core</label>
+          <select value={data.division} onChange={set('division')} className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white/80 focus:outline-none focus:border-red-500/50 transition">
+            <option value="System Core">System Core Node</option>
+            <option value="Aries AI">Aries LLM Pipeline</option>
+            <option value="Prime Records">Prime Music Suite</option>
+            <option value="DJ Em Events">Event Visual Syncs</option>
+            <option value="Game Dev">Unity Horror Concept</option>
+          </select>
+        </div>
+      </div>
+      <Textarea label="Incident Telemetry Description" value={data.desc} onChange={set('desc')} placeholder="Describe what occurred, console logs seen, or system behavior..." rows={2} required />
+      <Textarea label="Reproduction Telemetry Steps" value={data.steps} onChange={set('steps')} placeholder="1. Go to tab X\n2. Trigger input Y..." rows={2} />
+      <SubmitBtn loading={loading} onClick={() => onSubmit('Staff System Report', data)} label="Dispatch Incident Report" color="#EF4444" />
+    </div>
+  );
+}
+
+function AccountMgmtForm({ onSubmit, loading }) {
+  const [data, setData] = useState({ name: '', email: '', requestType: 'Request Role Upgrade', authCode: '', reason: '' });
+  const set = k => e => setData(d => ({ ...d, [k]: e.target.value }));
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Display Name" value={data.name} onChange={set('name')} placeholder="Your name" required />
+        <Field label="Account Email" type="email" value={data.email} onChange={set('email')} placeholder="you@email.com" required />
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-mono text-white/40 uppercase font-bold tracking-wider">Action Requested</label>
+          <select value={data.requestType} onChange={set('requestType')} className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white/80 focus:outline-none focus:border-emerald-500/50 transition">
+            <option value="Request Role Upgrade">Request Role Upgrade</option>
+            <option value="Reset Security Credentials">Reset Security Credentials</option>
+            <option value="Export My Account Data">Export My Account Data (JSON)</option>
+            <option value="Request Account Deletion">Request Account Deletion</option>
+          </select>
+        </div>
+        <Field label="Authorization/Triage Code" value={data.authCode} onChange={set('authCode')} placeholder="Staff validation hash" />
+      </div>
+      <Textarea label="Justification & Business Case" value={data.reason} onChange={set('reason')} placeholder="State the reason for this account upgrade or modification request..." rows={2} required />
+      <SubmitBtn loading={loading} onClick={() => onSubmit('Account Management', data)} label="Submit Account Request" color="#10B981" />
+    </div>
+  );
+}
+
 // ---- Shared field components ----
 function Field({ label, type = 'text', value, onChange, placeholder, required }) {
   return (
@@ -189,7 +254,7 @@ export default function FormsCenter({ isOpen, onClose }) {
   const [success, setSuccess] = useState(null);
 
   const availableForms = FORM_TYPES.filter(f => {
-    if (f.id === 'vacation') return can('view_staff_portal');
+    if (f.id === 'vacation' || f.id === 'staff_report') return can('view_staff_portal');
     return true;
   });
 
@@ -314,6 +379,8 @@ export default function FormsCenter({ isOpen, onClose }) {
                   {activeForm === 'tech' && <TechForm onSubmit={handleSubmit} loading={loading} />}
                   {activeForm === 'contact' && <ContactForm onSubmit={handleSubmit} loading={loading} />}
                   {activeForm === 'vacation' && <VacationForm onSubmit={handleSubmit} loading={loading} />}
+                  {activeForm === 'staff_report' && <StaffReportForm onSubmit={handleSubmit} loading={loading} />}
+                  {activeForm === 'account_mgmt' && <AccountMgmtForm onSubmit={handleSubmit} loading={loading} />}
                 </motion.div>
               )}
             </div>

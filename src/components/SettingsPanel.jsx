@@ -224,6 +224,37 @@ export default function SettingsPanel({ onClose }) {
                 <div className="h-px bg-white/5" />
 
                 <div>
+                  <h3 className="text-xs font-bold text-white mb-3">Seasonal Look Override</h3>
+                  <p className="text-[10px] text-white/30 mb-2 leading-relaxed">
+                    Bypass date-based auto-seasons to preview specific holiday themes and effects instantly.
+                  </p>
+                  <select
+                    value={localStorage.getItem('mfs_active_season') || 'auto'}
+                    onChange={e => {
+                      if (e.target.value === 'auto') {
+                        localStorage.removeItem('mfs_active_season');
+                      } else {
+                        localStorage.setItem('mfs_active_season', e.target.value);
+                      }
+                      toast.success(`Seasonal look override active: ${e.target.value}`);
+                      setTimeout(() => window.location.reload(), 600);
+                    }}
+                    className="w-full px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="auto">Automatic (Date Based)</option>
+                    <option value="christmas">Christmas 🎄</option>
+                    <option value="winter">Winter ❄️</option>
+                    <option value="newyear">New Year 🎆</option>
+                    <option value="halloween">Halloween 🎃</option>
+                    <option value="spring">Spring 🌸</option>
+                    <option value="summer">Summer ☀️</option>
+                    <option value="autumn">Autumn 🍂</option>
+                  </select>
+                </div>
+
+                <div className="h-px bg-white/5" />
+
+                <div>
                   <h3 className="text-xs font-bold text-white mb-3">Accessibility</h3>
                   {[
                     {

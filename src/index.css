@@ -163,3 +163,93 @@ body {
 .text-glow-moss {
   text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
 }
+
+/* =====================================================
+   SEASONAL ANIMATIONS
+   ===================================================== */
+
+/* Christmas candy cane stripes */
+@keyframes candy-cane-slide {
+  0%   { background-position: 0 0; }
+  100% { background-position: 40px 40px; }
+}
+
+/* Snowfall drift */
+@keyframes snowfall {
+  0%   { transform: translateY(-20px) translateX(0px) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.8; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(110vh) translateX(30px) rotate(360deg); opacity: 0; }
+}
+
+/* Fireworks burst */
+@keyframes fireworks-burst {
+  0%   { transform: scale(0); opacity: 1; }
+  60%  { transform: scale(1.5); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Neon tube flicker */
+@keyframes neon-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+  20%, 24%, 55% {
+    opacity: 0.6;
+    filter: drop-shadow(0 0 2px currentColor);
+  }
+}
+
+/* Gift box pulse */
+@keyframes gift-pulse {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50%       { transform: scale(1.06) rotate(2deg); }
+}
+
+/* Ribbon shine */
+@keyframes ribbon-shine {
+  0%   { left: -60%; }
+  100% { left: 150%; }
+}
+
+/* Star twinkle */
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50%       { opacity: 1;   transform: scale(1.2); }
+}
+
+/* Neon brick shimmer */
+@keyframes brick-shimmer {
+  0%   { opacity: 0; transform: translateX(-100%); }
+  30%  { opacity: 0.15; }
+  70%  { opacity: 0.15; }
+  100% { opacity: 0; transform: translateX(200%); }
+}
+
+/* Particle orbit */
+@keyframes orbit {
+  0%   { transform: rotate(0deg) translateX(30px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(30px) rotate(-360deg); }
+}
+
+/* Neon pulse glow on image */
+.neon-glow-red  { animation: neon-red-glow  2s ease-in-out infinite alternate; }
+.neon-glow-blue { animation: neon-blue-glow 2.4s ease-in-out infinite alternate; }
+
+@keyframes neon-red-glow {
+  from { box-shadow: 0 0 10px #ff3333, 0 0 20px #ff3333, 0 0 40px #cc0000; }
+  to   { box-shadow: 0 0 20px #ff5555, 0 0 40px #ff3333, 0 0 80px #cc0000; }
+}
+
+@keyframes neon-blue-glow {
+  from { box-shadow: 0 0 10px #3399ff, 0 0 20px #0066ff, 0 0 40px #0033cc; }
+  to   { box-shadow: 0 0 20px #55aaff, 0 0 40px #3399ff, 0 0 80px #0044dd; }
+}
+
+/* Christmas themed global border on December */
+.xmas-mode {
+  --accent-primary: #cc3333;
+  --accent-secondary: #228822;
+}
+

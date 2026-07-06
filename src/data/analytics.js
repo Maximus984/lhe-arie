@@ -119,9 +119,13 @@ export function updatePeakViewers(count) {
   }
 }
 
+import { checkScheduledMaintenance } from './releases.js';
+
 // ---- Maintenance Mode ----
 export function isMaintenanceMode() {
-  return localStorage.getItem(MAINTENANCE_KEY) === 'true';
+  if (localStorage.getItem(MAINTENANCE_KEY) === 'true') return true;
+  const sched = checkScheduledMaintenance();
+  return sched.isMaintenance;
 }
 
 export function setMaintenanceMode(enabled) {
@@ -129,6 +133,8 @@ export function setMaintenanceMode(enabled) {
 }
 
 export function getMaintenanceMessage() {
+  const sched = checkScheduledMaintenance();
+  if (sched.isMaintenance) return sched.message;
   return localStorage.getItem('mfs_maintenance_msg') || 'We are currently updating and improving our systems. Please check back soon.';
 }
 

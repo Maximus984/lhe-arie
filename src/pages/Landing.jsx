@@ -2,27 +2,84 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useInView } from 'framer-motion';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Stars, Float, Sphere, MeshDistortMaterial } from '@react-three/drei';
+import { Stars, Float, Sphere, MeshDistortMaterial, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import IntroSequence3D from '../components/IntroSequence3D.jsx';
 import AIChatSystem from '../components/AIChatSystem.jsx';
 import { Disc, Zap, Cpu, Gamepad2, ArrowRight, Music, Star, Globe, Users, Award, ChevronDown } from 'lucide-react';
 import LiveViewerCounter from '../components/LiveViewerCounter.jsx';
 
-// ---- Hero 3D background ----
+// ---- Hero 3D background with neon brick ----
+function HeroNeonLight({ position, color, intensity, speed }) {
+  const lightRef = useRef();
+  useFrame(({ clock }) => {
+    if (lightRef.current) {
+      lightRef.current.intensity = intensity + Math.sin(clock.getElapsedTime() * speed) * (intensity * 0.3);
+    }
+  });
+  return <pointLight ref={lightRef} position={position} color={color} intensity={intensity} distance={20} decay={2} />;
+}
+
 function HeroParticle({ pos, color }) {
   const ref = useRef();
   useFrame(({ clock }) => {
     if (ref.current) {
       ref.current.position.y = pos[1] + Math.sin(clock.getElapsedTime() * 0.5 + pos[0]) * 0.4;
       ref.current.rotation.x = clock.getElapsedTime() * 0.3;
+      ref.current.rotation.z = clock.getElapsedTime() * 0.2;
     }
   });
   return (
     <mesh ref={ref} position={pos}>
-      <octahedronGeometry args={[0.08]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} />
+      <octahedronGeometry args={[0.09]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
     </mesh>
+  );
+}
+
+function HeroBrickPlane() {
+  const meshRef = useRef();
+  // Load texture
+  let texture = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    texture = useTexture('/brand/neon-brick.jpg');
+    if (texture) {
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+    }
+  } catch {}
+
+  useFrame(({ clock, mouse }) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, mouse.y * 0.03, 0.04);
+      meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, mouse.x * 0.04, 0.04);
+    }
+  });
+
+  return (
+    <group>
+      <mesh ref={meshRef} position={[0, 0, -8]}>
+        <planeGeometry args={[30, 18]} />
+        <meshStandardMaterial
+          map={texture || undefined}
+          color={texture ? undefined : '#1a0808'}
+          roughness={0.9}
+          emissive={new THREE.Color(0.05, 0.02, 0.02)}
+          emissiveIntensity={0.4}
+        />
+      </mesh>
+      {/* Left neon bar (red) */}
+      <mesh position={[-5.5, 7.8, -7.5]}>
+        <boxGeometry args={[7, 0.1, 0.1]} />
+        <meshStandardMaterial color="#ff3333" emissive="#ff2222" emissiveIntensity={5} />
+      </mesh>
+      {/* Right neon bar (blue) */}
+      <mesh position={[5.5, 7.8, -7.5]}>
+        <boxGeometry args={[6, 0.1, 0.1]} />
+        <meshStandardMaterial color="#3399ff" emissive="#2288ff" emissiveIntensity={5} />
+      </mesh>
+    </group>
   );
 }
 
@@ -52,8 +109,12 @@ function HeroScene() {
 
   return (
     <>
-      <Stars radius={80} depth={50} count={2000} factor={2} saturation={0} fade speed={0.5} />
-      <ambientLight intensity={0.05} />
+      <Stars radius={80} depth={50} count={1800} factor={2} saturation={0} fade speed={0.5} />
+      <ambientLight intensity={0.06} />
+      <HeroBrickPlane />
+      <HeroNeonLight position={[-6, 7, -6]} color="#ff4444" intensity={3.5} speed={8.3} />
+      <HeroNeonLight position={[6, 7, -6]} color="#3399ff" intensity={3.0} speed={1.4} />
+      <HeroNeonLight position={[0, 6, -5]} color="#ff88cc" intensity={1.5} speed={3} />
       <HeroOrb />
       {particles.map((p, i) => <HeroParticle key={i} {...p} />)}
     </>
@@ -78,12 +139,12 @@ function RevealSection({ children, delay = 0 }) {
 
 // ---- Fact cards ----
 const FORGE_FACTS = [
-  { icon: '🎵', stat: '50+', label: 'Tracks Produced', color: '#00E5FF' },
-  { icon: '⚡', stat: '100+', label: 'Live Events Visualized', color: '#10B981' },
-  { icon: '🤖', stat: '4.7B', label: 'AI Context Tokens/Cycle', color: '#6366F1' },
-  { icon: '🎮', stat: '2026', label: 'Game Launch Target', color: '#EF4444' },
-  { icon: '🌍', stat: '12+', label: 'Countries Reached', color: '#F59E0B' },
-  { icon: '🔥', stat: '1', label: 'Visionary Founder', color: '#EC4899' },
+  { icon: '🎵', stat: '50+',   label: 'Tracks Produced',          color: '#00E5FF' },
+  { icon: '⚡', stat: '100+',  label: 'Live Events Visualized',   color: '#10B981' },
+  { icon: '🎨', stat: 'Multi', label: 'Concert Visuals (incl. Ariana Grande)', color: '#EC4899' },
+  { icon: '🤖', stat: '4.7B',  label: 'AI Context Tokens/Cycle',  color: '#6366F1' },
+  { icon: '🎮', stat: '2026',  label: 'Game Launch Target',        color: '#EF4444' },
+  { icon: '🌍', stat: '12+',   label: 'Countries Reached',         color: '#F59E0B' },
 ];
 
 const PILLARS = [
@@ -93,8 +154,8 @@ const PILLARS = [
     title: 'Prime Records',
     subtitle: 'Music Division',
     color: '#00E5FF',
-    desc: 'High-energy remasters, original productions, and exclusive artist collaborations. Available on Spotify, Apple Music, BandLab, and SoundCloud.',
-    facts: ['50+ original tracks', 'Multi-genre catalog', 'Collaboration network', 'Studio-grade mastering'],
+    desc: 'High-energy remasters, original productions, and exclusive artist collaborations. Distributed on Spotify, Apple Music, BandLab, and SoundCloud.',
+    facts: ['50+ original tracks', 'Multi-genre catalog', 'Studio-grade mastering', 'BandLab & SoundCloud'],
   },
   {
     key: 'djem',
@@ -102,8 +163,8 @@ const PILLARS = [
     title: 'DJ Em',
     subtitle: 'Live Events & Visuals',
     color: '#10B981',
-    desc: 'Professional stage lighting design using TouchDesigner and DMX automation. Full live visual rigs for concerts, festivals, and private events.',
-    facts: ['100+ events performed', 'TouchDesigner visuals', 'DMX automation', 'Custom light rigs'],
+    desc: 'Professional stage lighting and visual design using TouchDesigner and DMX automation. Full live rigs for concerts, festivals, and private events — including reimagined visuals for major artists.',
+    facts: ['100+ events performed', 'TouchDesigner visuals', 'DMX automation', 'Concert visual credits'],
   },
   {
     key: 'aries',
@@ -111,8 +172,8 @@ const PILLARS = [
     title: 'Aries Technology',
     subtitle: 'AI & Software Division',
     color: '#6366F1',
-    desc: 'Local LLM infrastructure built on Ollama. Zero cloud dependency. The Aries AI Core v4.0 launches September 2026 with custom API and Python SDK.',
-    facts: ['Local LLM architecture', 'Custom API endpoints', 'Python SDK', 'Sep 2026 rollout'],
+    desc: 'Local LLM infrastructure built on Ollama. Zero cloud dependency. The Aries AI Core v4.0 launches September 2026 with custom API, Python SDK, and enterprise integration.',
+    facts: ['Local LLM architecture', 'Custom API endpoints', 'Python SDK', 'Sep 2026 · v4.0 launch'],
   },
   {
     key: 'gamedev',
@@ -120,19 +181,184 @@ const PILLARS = [
     title: 'Game Development',
     subtitle: 'Interactive Media',
     color: '#EF4444',
-    desc: 'Atmospheric survival horror built in Unity. Navigate bio-concrete Japanese environments, solve cybernetic grid puzzles, and survive AI-driven stalkers.',
+    desc: 'Atmospheric survival horror built in Unity. Navigate bio-concrete Japanese environments, solve cybernetic grid puzzles, and survive AI-driven stalkers. Playable demo available.',
     facts: ['Unity game engine', 'Survival horror genre', 'Japanese architecture', 'Playable demo live'],
   },
 ];
 
 const OUR_WORK = [
-  { title: 'Adrenaline Rush', cat: 'Music Production', color: '#00E5FF', emoji: '🎵' },
-  { title: 'Dark Queen', cat: 'Music Production', color: '#00E5FF', emoji: '👑' },
-  { title: 'The Bio Forge Stage', cat: 'Live Event Rig', color: '#10B981', emoji: '💡' },
-  { title: 'Echoes of the Forge', cat: 'Game Development', color: '#EF4444', emoji: '🎮' },
-  { title: 'Aries Coder LLM', cat: 'AI Development', color: '#6366F1', emoji: '🤖' },
-  { title: 'Electric Whisper', cat: 'Music Production', color: '#00E5FF', emoji: '🎶' },
+  { title: 'Adrenaline Rush',       cat: 'Music Production', color: '#00E5FF', emoji: '🎵' },
+  { title: 'Dark Queen',            cat: 'Music Production', color: '#00E5FF', emoji: '👑' },
+  { title: 'Eternal Sunshine Visuals', cat: 'Concert Visual (Ariana Grande reimagined)', color: '#EC4899', emoji: '✨' },
+  { title: 'The Bio Forge Stage',   cat: 'Live Event Rig',   color: '#10B981', emoji: '💡' },
+  { title: 'Echoes of the Forge',   cat: 'Game Development', color: '#EF4444', emoji: '🎮' },
+  { title: 'Aries Coder LLM',       cat: 'AI Development',   color: '#6366F1', emoji: '🤖' },
+  { title: 'Electric Whisper',      cat: 'Music Production', color: '#00E5FF', emoji: '🎶' },
+  { title: 'Aries AI Core v4.0',    cat: 'Software — Sep 2026', color: '#6366F1', emoji: '⚡' },
 ];
+
+const MILESTONES = [
+  {
+    year: '2024',
+    title: 'Ecosystem Foundation',
+    subtitle: 'Prime Records & DJ Em',
+    description: 'Launched Maxx Forge Prime Records™ along with TouchDesigner live event visuals, completing 100+ events and establishing the creative core.',
+    icon: '🎵',
+    color: '#00E5FF',
+    hz: 220
+  },
+  {
+    year: '2025',
+    title: 'Visual Arts Expansion',
+    subtitle: 'Concert Productions',
+    description: 'Designed arena-level stage shows, including concert visual assets for Ariana Grande "Eternal Sunshine" tour showcase.',
+    icon: '🎨',
+    color: '#EC4899',
+    hz: 293
+  },
+  {
+    year: 'Mid 2025',
+    title: 'ProjectM Mentorship',
+    subtitle: 'Creator Development',
+    description: 'Offered community learning guides, modular UI assets, and developer documentation to support creative coders.',
+    icon: '🤝',
+    color: '#F59E0B',
+    hz: 349
+  },
+  {
+    year: 'Early 2026',
+    title: 'Aries AI Core Integration',
+    subtitle: 'Local Core LLM',
+    description: 'Successfully deployed local Ollama client infrastructure, creating self-hosted intelligence systems on private RTX cores.',
+    icon: '🤖',
+    color: '#6366F1',
+    hz: 440
+  },
+  {
+    year: 'Late 2026',
+    title: 'Modular Client Workspace',
+    subtitle: 'Core v4.0 Platform',
+    description: 'Replaced high-overhead server frameworks with offline-first client dashboards, built-in Python game arcade, and profile chest.',
+    icon: '⚡',
+    color: '#10B981',
+    hz: 523
+  }
+];
+
+function InteractiveTimeline() {
+  const [activeIdx, setActiveIdx] = useState(4); // default to Late 2026
+
+  const playTone = (hz) => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(hz, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.65);
+    } catch (e) {}
+  };
+
+  const current = MILESTONES[activeIdx];
+
+  return (
+    <div className="py-24 px-6 relative border-t border-white/5 bg-[#050508]/40">
+      <div className="max-w-5xl mx-auto animate-fade-in">
+        <div className="flex flex-col items-center text-center gap-4 mb-16">
+          <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[10px] font-mono text-emerald-400 uppercase tracking-wider">Roadmap</span>
+          <h2 className="text-4xl md:text-5xl font-display font-black tracking-tight uppercase">Studio Roadmap</h2>
+          <p className="text-sm text-white/40 font-mono tracking-wide max-w-lg">Click the timeline coordinates below to explore the development cycles.</p>
+        </div>
+
+        {/* Timeline Track */}
+        <div className="relative flex flex-col md:flex-row items-center justify-between gap-6 md:gap-4 mb-12">
+          {/* Horizontal line (desktop) */}
+          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/5 hidden md:block z-0" />
+          
+          {MILESTONES.map((m, idx) => {
+            const isSelected = activeIdx === idx;
+            return (
+              <div 
+                key={idx}
+                className="relative z-10 flex flex-col items-center cursor-pointer"
+                onClick={() => { setActiveIdx(idx); playTone(m.hz); }}
+              >
+                {/* Year tag */}
+                <span className={`text-xs font-mono font-bold tracking-wider mb-2 transition duration-300 ${isSelected ? 'text-white' : 'text-white/30'}`}>
+                  {m.year}
+                </span>
+
+                {/* Glowing Node Button */}
+                <motion.div
+                  whileHover={{ scale: 1.12 }}
+                  animate={isSelected ? {
+                    boxShadow: `0 0 20px ${m.color}`,
+                    borderColor: m.color,
+                    background: m.color
+                  } : {
+                    boxShadow: 'none',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    background: 'rgba(5,5,8,0.9)'
+                  }}
+                  className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-base transition-colors duration-300"
+                >
+                  {m.icon}
+                </motion.div>
+                
+                {/* Micro title (mobile only) */}
+                <span className={`text-[10px] font-mono mt-2 md:hidden ${isSelected ? 'text-white/80' : 'text-white/20'}`}>
+                  {m.title}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Selected Milestone Card */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeIdx}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="glass-panel rounded-3xl p-8 border border-white/10 relative overflow-hidden"
+            style={{ 
+              background: `linear-gradient(135deg, ${current.color}05 0%, rgba(10,10,15,0.95) 100%)`,
+              boxShadow: `0 0 40px ${current.color}08`
+            }}
+          >
+            {/* Background huge glow */}
+            <div className="absolute -top-12 -right-12 text-9xl opacity-5 pointer-events-none">{current.icon}</div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-widest font-bold px-2 py-0.5 rounded" style={{ color: current.color, background: `${current.color}15` }}>
+                  {current.year} Telemetry
+                </span>
+                <h3 className="text-2xl font-display font-black text-white tracking-tight mt-2">{current.title}</h3>
+                <p className="text-xs font-mono text-white/40">{current.subtitle}</p>
+              </div>
+              <button 
+                onClick={() => playTone(current.hz)}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-mono text-white/60 hover:text-white hover:bg-white/10 transition flex items-center gap-2 self-start md:self-center"
+              >
+                <Sparkles size={11} /> Play Telemetry Tune
+              </button>
+            </div>
+
+            <p className="text-sm text-white/60 leading-relaxed font-light">{current.description}</p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
 
 const TESTIMONIALS = [
   { name: 'DJ Zeppelin', role: 'Collaborator & Tech Lead', text: 'The Aries AI pipeline is unlike anything I\'ve worked with — completely local, blazing fast, and tailored to creative workflows.', avatar: 'ZL', color: '#6366F1' },
@@ -371,6 +597,9 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Dynamic Roadmap Milestones */}
+      <InteractiveTimeline />
+
       {/* About the Founder & Mission Statement */}
       <section id="about" className="py-28 px-6 relative overflow-hidden">
         {/* Glow background decoration */}
@@ -508,6 +737,16 @@ export default function Landing() {
                 <span className="font-display font-black text-sm text-white">MAXX FORGE STUDIO™</span>
               </div>
               <p className="text-[11px] font-mono text-white/30 leading-relaxed">The interconnected digital ecosystem for creative technology.</p>
+              {/* YouTube link */}
+              <a
+                href="https://www.youtube.com/@MaxxForgeStudio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-[11px] font-mono text-red-400/60 hover:text-red-400 transition mt-1"
+              >
+                <span style={{ fontSize: '13px' }}>▶</span>
+                @MaxxForgeStudio
+              </a>
             </div>
             {[
               { title: 'Divisions', links: ['Prime Records', 'DJ Em Events', 'Aries AI', 'Game Dev'] },

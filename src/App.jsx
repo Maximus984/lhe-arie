@@ -10,9 +10,12 @@ import StaffPortal from './pages/StaffPortal.jsx';
 import MaxAiDemo from './pages/MaxAiDemo.jsx';
 import Workspace from './pages/Workspace.jsx';
 import ForgeFeed from './pages/ForgeFeed.jsx';
+import LiveArena from './pages/LiveArena.jsx';
 import MaintenancePage from './pages/MaintenancePage.jsx';
 import PermissionsModal from './components/PermissionsModal.jsx';
 import SeasonalEffects from './components/SeasonalEffects.jsx';
+import ForgeChest from './components/ForgeChest.jsx';
+import SocialsDock from './components/SocialsDock.jsx';
 import { isMaintenanceMode, getMaintenanceMessage } from './data/analytics.js';
 
 function ProtectedRoute({ children, requiredPermission }) {
@@ -63,6 +66,9 @@ function AppRoutes() {
         } />
         <Route path="/feed" element={
           <ProtectedRoute><ForgeFeed /></ProtectedRoute>
+        } />
+        <Route path="/live" element={
+          <ProtectedRoute><LiveArena /></ProtectedRoute>
         } />
         <Route path="/admin" element={
           <ProtectedRoute requiredPermission="view_admin"><AdminPanel /></ProtectedRoute>
@@ -130,6 +136,8 @@ export default function App() {
         />
         <PermissionsModal />
         <SeasonalEffects />
+        <ForgeChest />
+        <SocialsDock />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
