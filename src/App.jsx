@@ -85,7 +85,7 @@ function AppRoutes() {
 export default function App() {
   useEffect(() => {
     const applyTheme = () => {
-      const theme = localStorage.getItem('mfs_theme') || 'obsidian';
+      const theme = localStorage.getItem('mfs_theme') || 'liquid-glass';
       document.documentElement.setAttribute('data-theme', theme);
       
       let accent = '#10B981';

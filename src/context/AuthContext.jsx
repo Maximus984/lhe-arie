@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { v4 as uuidv4 } from 'uuid';
 import { getUsers, saveUsers, getUserByEmail, initializeUsers, hasPermission, ROLES } from '../data/users.js';
 import { initializeFeed } from '../data/feed.js';
+import { publish } from '../data/realtime.js';
 
 const AuthContext = createContext(null);
 
@@ -272,6 +273,8 @@ export function AuthProvider({ children }) {
     const updated = [newSub, ...submissions];
     localStorage.setItem('mfs_form_submissions', JSON.stringify(updated));
     setFormSubmissions(updated);
+    // Broadcast to all tabs so Staff Portal gets instant notification
+    publish('form_submitted', { id: newSub.id, type: newSub.formType || formData.formType, submittedAt: newSub.submittedAt });
     return newSub.id;
   };
 
@@ -312,6 +315,8 @@ export function AuthProvider({ children }) {
     const updated = [newTicket, ...tickets];
     localStorage.setItem('mfs_chat_tickets', JSON.stringify(updated));
     setChatTickets(updated);
+    // Broadcast to all tabs so Staff Portal gets instant notification
+    publish('chat_ticket', { id: newTicket.id, userName: newTicket.userName, subject: newTicket.subject });
     return newTicket.id;
   };
 

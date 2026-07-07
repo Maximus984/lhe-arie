@@ -4,10 +4,12 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { ArrowLeft, Send, Radio, Users, CheckCircle, Shield, Sparkles, Volume2, Maximize, Play, Pause } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { publish, subscribe } from '../data/realtime.js';
 
 // =====================================================
 // MAXX FORGE STUDIO™ — Live Theater Watch Arena
 // Interactive high-fidelity viewer layout with live chat overlays
+// Real-time chat via BroadcastChannel — all tabs see messages instantly
 // =====================================================
 
 export default function LiveArena() {
@@ -45,31 +47,22 @@ export default function LiveArena() {
     } catch (e) {}
   };
 
-  // Sync state from localStorage
-  const syncState = () => {
+  // Load initial state from localStorage
+  const loadState = () => {
     try {
-      // 1. Stream configs
       const localConfig = localStorage.getItem('mfs_live_stream_config');
       if (localConfig) {
         setStreamConfig(JSON.parse(localConfig));
       } else {
-        // Fallback default
         const defaultConfig = {
-          active: true,
-          type: 'preset',
-          url: '',
-          filter: 'neon',
-          showGoal: true,
-          goalTitle: 'Upgrade Target',
-          goalTarget: 100,
-          goalCurrent: 82,
-          viewerCount: 142
+          active: true, type: 'preset', url: '', filter: 'neon',
+          showGoal: true, goalTitle: 'Upgrade Target', goalTarget: 100,
+          goalCurrent: 82, viewerCount: 142
         };
         localStorage.setItem('mfs_live_stream_config', JSON.stringify(defaultConfig));
         setStreamConfig(defaultConfig);
       }
 
-      // 2. Chats
       const localChat = localStorage.getItem('mfs_live_chat_logs');
       if (localChat) {
         setChatList(JSON.parse(localChat));
@@ -85,9 +78,39 @@ export default function LiveArena() {
   };
 
   useEffect(() => {
-    syncState();
-    const interval = setInterval(syncState, 2000);
-    return () => clearInterval(interval);
+    loadState();
+
+    // Real-time subscription — receive chat messages from other tabs instantly
+    const unsub = subscribe(['live_chat_sent', 'live_config_changed'], (event, data) => {
+      if (event === 'live_chat_sent') {
+        setChatList(prev => {
+          // Avoid duplicate if this tab already added it
+          if (prev.find(m => m.id === data.id)) return prev;
+          const updated = [...prev, data].slice(-80);
+          localStorage.setItem('mfs_live_chat_logs', JSON.stringify(updated));
+          return updated;
+        });
+        playBeep();
+      } else if (event === 'live_config_changed') {
+        try {
+          const cfg = localStorage.getItem('mfs_live_stream_config');
+          if (cfg) setStreamConfig(JSON.parse(cfg));
+        } catch (_) {}
+      }
+    });
+
+    // Slower poll as fallback for stream config changes only
+    const configPoll = setInterval(() => {
+      try {
+        const cfg = localStorage.getItem('mfs_live_stream_config');
+        if (cfg) setStreamConfig(JSON.parse(cfg));
+      } catch (_) {}
+    }, 5000);
+
+    return () => {
+      unsub();
+      clearInterval(configPoll);
+    };
   }, []);
 
   useEffect(() => {
@@ -113,11 +136,15 @@ export default function LiveArena() {
       timestamp: new Date().toISOString()
     };
 
-    const updatedChats = [...chatList, newMessage].slice(-80); // cap at 80 messages
+    // Save to localStorage and update local state
+    const updatedChats = [...chatList, newMessage].slice(-80);
     localStorage.setItem('mfs_live_chat_logs', JSON.stringify(updatedChats));
     setChatList(updatedChats);
     setNewMsg('');
     playBeep();
+
+    // Broadcast to all other open tabs instantly
+    publish('live_chat_sent', newMessage);
   };
 
   // Switch filter overlays
@@ -134,6 +161,12 @@ export default function LiveArena() {
     }
   };
 
+  const getRoleBadge = (role) => {
+    if (role === 'founder') return 'bg-red-500/10 text-red-400 border border-red-500/20';
+    if (role === 'staff') return 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20';
+    return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+  };
+
   return (
     <div className="min-h-screen bg-[#050508] text-white p-4 md:p-8 flex flex-col gap-6 selection:bg-cyan-500/20">
       {/* Header Bar */}
@@ -148,16 +181,28 @@ export default function LiveArena() {
           </div>
         </div>
 
-        {streamConfig.active ? (
-          <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[10px] font-mono font-bold text-red-500 uppercase tracking-widest">LIVE BROADCAST</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-white/40">
-            <span className="text-[10px] font-mono uppercase tracking-widest font-bold">OFFLINE</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2.5">
+          {can('view_staff_portal') && (
+            <Link 
+              to="/staff" 
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-pink-500/10 border border-pink-500/20 hover:border-pink-500/40 text-pink-400 hover:text-pink-300 rounded-xl text-xs font-semibold hover:bg-pink-500/20 transition"
+            >
+              <Radio size={12} className="animate-pulse" />
+              Stream Controls
+            </Link>
+          )}
+
+          {streamConfig.active ? (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[10px] font-mono font-bold text-red-500 uppercase tracking-widest">LIVE BROADCAST</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-white/40">
+              <span className="text-[10px] font-mono uppercase tracking-widest font-bold">OFFLINE</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Broadcast Grid */}
@@ -169,26 +214,19 @@ export default function LiveArena() {
             {/* 1. Live stream display */}
             {streamConfig.active ? (
               streamConfig.type === 'webcam' ? (
-                // Webcam simulated feed or active camera
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950 font-mono text-cyan-400 gap-3" style={getFilterStyle()}>
                   <div className="relative w-full h-full">
-                    {/* Simulated tech scanning grid lines */}
-                    <div className="absolute inset-0 bg-scanlines opacity-20 pointer-events-none" />
                     <video className="w-full h-full object-cover" autoPlay loop muted playsInline src="/brand/webcam_loop.mp4" 
-                      onError={(e) => {
-                        // If no camera assets, show custom abstract placeholder
-                        e.target.style.display = 'none';
-                      }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
                     />
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gradient-to-t from-black/80 to-transparent">
                       <span className="text-[40px]">🎥</span>
-                      <span className="text-xs uppercase tracking-widest font-bold animate-pulse text-glow-blue">DIRECT CAMERA LINK ENGAGED</span>
+                      <span className="text-xs uppercase tracking-widest font-bold animate-pulse">DIRECT CAMERA LINK ENGAGED</span>
                       <span className="text-[9px] text-white/40">Aries low-latency webcam codec active</span>
                     </div>
                   </div>
                 </div>
               ) : streamConfig.type === 'youtube' && streamConfig.url ? (
-                // YouTube embed
                 <iframe
                   title="YouTube Live Feed"
                   src={`https://www.youtube.com/embed/${streamConfig.url}?autoplay=1&mute=1&controls=0&modestbranding=1`}
@@ -197,20 +235,26 @@ export default function LiveArena() {
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
+              ) : streamConfig.type === 'custom-video' && streamConfig.url ? (
+                <video
+                  src={streamConfig.url}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={getFilterStyle()}
+                />
               ) : (
-                // Default custom visual loop
                 <div className="absolute inset-0 bg-neutral-950 flex flex-col items-center justify-center" style={getFilterStyle()}>
-                  <div className="absolute inset-0 bg-scanlines opacity-10 pointer-events-none" />
-                  {/* We display a premium neon brick audio visualizer canvas here */}
                   <div className="flex flex-col items-center gap-3 text-cyan-400 font-mono text-center">
                     <Sparkles className="animate-spin text-cyber-blue" size={32} style={{ animationDuration: '6s' }} />
-                    <span className="text-xs uppercase tracking-[0.2em] font-bold text-glow-blue">Maxx Forge Visual Stream</span>
+                    <span className="text-xs uppercase tracking-[0.2em] font-bold">Maxx Forge Visual Stream</span>
                     <span className="text-[9px] font-mono text-white/40">Auto-synced TouchDesigner feed</span>
                   </div>
                 </div>
               )
             ) : (
-              // Offline State Card
               <div className="flex flex-col items-center gap-4 font-mono text-center text-white/40">
                 <span className="text-4xl">📡</span>
                 <div>
@@ -221,7 +265,6 @@ export default function LiveArena() {
             )}
 
             {/* Overlays */}
-            {/* Viewer Count Badge */}
             {streamConfig.active && (
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-red-600/90 border border-red-500/30 rounded-lg px-2.5 py-1 text-[10px] font-mono font-bold tracking-wider">
                 <Users size={12} />
@@ -229,12 +272,6 @@ export default function LiveArena() {
               </div>
             )}
 
-            {/* Christmas/Halloween visual overlay decoration */}
-            {streamConfig.active && streamConfig.filter === 'christmas' && (
-              <div className="absolute inset-0 pointer-events-none z-10 bg-christmas-frame animate-pulse" />
-            )}
-
-            {/* Sub Goal Progress Bar */}
             {streamConfig.active && streamConfig.showGoal && (
               <div className="absolute bottom-4 left-4 right-4 z-20 bg-neutral-950/80 border border-white/10 p-3 rounded-xl flex items-center justify-between gap-4 backdrop-blur-md">
                 <div className="flex flex-col gap-0.5 min-w-[120px]">
@@ -266,30 +303,44 @@ export default function LiveArena() {
           </div>
         </div>
 
-        {/* Right Column: Chat (4 cols) */}
+        {/* Right Column: Live Chat (4 cols) */}
         <div className="lg:col-span-4 flex flex-col bg-white/3 border border-white/5 rounded-3xl overflow-hidden h-[500px] lg:h-auto">
           {/* Chat Header */}
           <div className="p-4 border-b border-white/5 bg-white/2 flex items-center justify-between">
-            <span className="text-xs font-mono font-bold uppercase text-white/60 tracking-wider">Live Chat</span>
-            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold uppercase tracking-wider">Online</span>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]" />
+              <span className="text-xs font-mono font-bold uppercase text-white/60 tracking-wider">Live Chat</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold uppercase tracking-wider">
+                {chatList.length} msgs
+              </span>
+            </div>
           </div>
 
           {/* Message List */}
           <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-3">
+            {chatList.length === 0 && (
+              <p className="text-center text-xs font-mono text-white/20 py-8">No messages yet. Be the first!</p>
+            )}
             {chatList.map(chat => (
-              <div key={chat.id} className="flex flex-col gap-1 text-xs">
+              <motion.div
+                key={chat.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col gap-1 text-xs"
+              >
                 <div className="flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded-[4px] text-[8px] font-mono uppercase font-bold ${
-                    chat.role === 'founder' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                    chat.role === 'staff' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' :
-                    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  }`}>
+                  <span className={`px-1.5 py-0.5 rounded-[4px] text-[8px] font-mono uppercase font-bold ${getRoleBadge(chat.role)}`}>
                     {chat.role}
                   </span>
                   <span className="font-bold text-white/80 font-mono">{chat.author}</span>
+                  <span className="ml-auto text-[8px] text-white/20 font-mono">
+                    {new Date(chat.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
                 <p className="text-white/60 font-light leading-relaxed pl-1">{chat.text}</p>
-              </div>
+              </motion.div>
             ))}
             <div ref={chatBottomRef} />
           </div>

@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { motion } from 'framer-motion';
-import { Terminal, MessageCircle, FileText, Calendar, ArrowLeft, Send, CheckCircle, Clock, Radio, Sliders, Camera, Tv, Activity, Check, Plus, Trash2, Settings } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Terminal, MessageCircle, FileText, Calendar, ArrowLeft, Send, CheckCircle, Clock, Radio, Sliders, Camera, Tv, Activity, Check, Plus, Trash2, Settings, Zap, Eye, EyeOff, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useEffect } from 'react';
+import { subscribe, publish } from '../data/realtime.js';
+import { setLiveMode, getLiveModeConfig } from '../data/liveMode.js';
 
 export default function StaffPortal() {
   const { chatTickets, formSubmissions, updateSubmission, calendarEvents, addCalendarEvent } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('chats'); // chats | forms | schedule | live-control
+  const [activeTab, setActiveTab] = useState('chats'); // chats | forms | schedule | live-control | live-mode
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
+
+  // Live Mode state
+  const [liveModeConfig, setLiveModeConfig] = useState(getLiveModeConfig);
+  const [liveStreamUrl, setLiveStreamUrl] = useState(getLiveModeConfig().streamUrl || '');
+  const [liveTitle, setLiveTitle] = useState(getLiveModeConfig().title || 'WE ARE LIVE');
+  const [liveSubtitle, setLiveSubtitle] = useState(getLiveModeConfig().subtitle || 'Maxx Forge Studio is streaming now.');
 
   // Live Stream Control States
   const [streamActive, setStreamActive] = useState(false);
@@ -47,6 +55,24 @@ export default function StaffPortal() {
         setBroadcasterChat(JSON.parse(chats));
       }
     } catch (e) {}
+
+    // Real-time: subscribe to incoming form submissions and chat escalations
+    const unsub = subscribe(['form_submitted', 'chat_ticket', 'live_chat_sent'], (event, data) => {
+      if (event === 'form_submitted') {
+        toast('📋 New form submission received!', { icon: '📋', duration: 5000, style: { borderLeft: '3px solid #10B981' } });
+      } else if (event === 'chat_ticket') {
+        toast(`💬 Chat escalated by ${data.userName || 'a user'}`, { icon: '💬', duration: 5000, style: { borderLeft: '3px solid #6366F1' } });
+      } else if (event === 'live_chat_sent') {
+        setBroadcasterChat(prev => {
+          if (prev.find(m => m.id === data.id)) return prev;
+          const updated = [...prev, data].slice(-80);
+          localStorage.setItem('mfs_live_chat_logs', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    });
+
+    return () => unsub();
   }, []);
 
   const saveStreamConfig = (updates = {}) => {
@@ -62,11 +88,66 @@ export default function StaffPortal() {
       viewerCount: updates.viewerCount !== undefined ? updates.viewerCount : viewerCount,
     };
     localStorage.setItem('mfs_live_stream_config', JSON.stringify(config));
+    publish('live_config_changed', {});
     
     if (updates.active === true) {
       toast.success('Broadcast stream is now LIVE!');
     } else if (updates.active === false) {
       toast.success('Broadcast terminated.');
+    }
+  };
+
+  const handleSourceChange = (val) => {
+    let finalUrl = val.trim();
+    let finalType = streamType;
+
+    const ytMatch = finalUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+    if (ytMatch) {
+      finalUrl = ytMatch[1];
+      finalType = 'youtube';
+      setStreamType('youtube');
+      toast.success('YouTube Video ID extracted successfully!');
+    } else if (finalUrl.includes('.mp4') || finalUrl.startsWith('data:video/')) {
+      finalType = 'custom-video';
+      setStreamType('custom-video');
+    }
+    
+    setStreamUrl(finalUrl);
+    saveStreamConfig({ url: finalUrl, type: finalType });
+  };
+
+  const handleVideoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+      return toast.error('Only MP4/video files are allowed.');
+    }
+
+    const reader = new FileReader();
+    toast.loading('Processing video file...', { id: 'vid_load' });
+    reader.onloadend = () => {
+      setStreamType('custom-video');
+      setStreamUrl(reader.result);
+      saveStreamConfig({ type: 'custom-video', url: reader.result });
+      toast.dismiss('vid_load');
+      toast.success('Video loaded and piped to broadcast feed!');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleToggleLiveMode = (on) => {
+    const cfg = setLiveMode(on, {
+      streamUrl: liveStreamUrl,
+      title: liveTitle,
+      subtitle: liveSubtitle,
+    });
+    setLiveModeConfig(cfg);
+    publish('live_mode_changed', { active: on });
+    if (on) {
+      toast.success('🔴 LIVE MODE ACTIVATED — Dashboard banner is live!');
+    } else {
+      toast.success('Live Mode deactivated.');
     }
   };
 
@@ -141,6 +222,7 @@ export default function StaffPortal() {
             { id: 'forms', label: 'Proposals Inbox', icon: <FileText size={14} /> },
             { id: 'schedule', label: 'Shift Schedule', icon: <Calendar size={14} /> },
             { id: 'live-control', label: 'TikTok Live Studio', icon: <Radio size={14} /> },
+            { id: 'live-mode', label: '🔴 Live Mode', icon: <Zap size={14} /> },
           ].map(tab => (
             <button
               key={tab.id}
@@ -353,6 +435,7 @@ export default function StaffPortal() {
                     <option value="preset">Preset TouchDesigner Loop</option>
                     <option value="webcam">Simulated Webcam Feed</option>
                     <option value="youtube">YouTube Embed Stream</option>
+                    <option value="custom-video">Custom Video (Link / Upload)</option>
                   </select>
                 </div>
 
@@ -408,14 +491,32 @@ export default function StaffPortal() {
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950 border border-pink-500/20">
                     {/* OBS Tech Guide Grid Lines overlay */}
                     <div className="absolute inset-0 border border-dashed border-white/5 pointer-events-none grid grid-cols-3 grid-rows-3 z-20" />
+                    
                     {streamType === 'webcam' ? (
                       <span className="text-xs text-pink-400 animate-pulse font-bold tracking-widest z-10 uppercase">🎥 WEBCAM FEED ACTIVE</span>
-                    ) : streamType === 'youtube' ? (
-                      <span className="text-xs text-pink-400 animate-pulse font-bold tracking-widest z-10 uppercase">📺 YOUTUBE STREAM PREVIEW</span>
+                    ) : streamType === 'youtube' && streamUrl ? (
+                      <iframe
+                        src={`https://www.youtube.com/embed/${streamUrl}?autoplay=1&mute=1&controls=0`}
+                        className="absolute inset-0 w-full h-full border-0 pointer-events-none"
+                        title="YouTube Preview"
+                      />
+                    ) : streamType === 'custom-video' && streamUrl ? (
+                      <video
+                        src={streamUrl}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
                     ) : (
                       <span className="text-xs text-pink-400 animate-pulse font-bold tracking-widest z-10 uppercase">🔮 GRAPHICS GENERATOR LOOP</span>
                     )}
-                    <span className="text-[9px] text-white/30 z-10 mt-1">Resolving resolution...</span>
+                    
+                    {/* Source label */}
+                    <div className="absolute bottom-2 left-3 text-[9px] font-mono text-white/60 bg-black/60 border border-white/10 px-2 py-0.5 rounded backdrop-blur z-30">
+                      OBS OUT: {streamType.toUpperCase()}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-xs text-white/30 font-bold uppercase tracking-widest">FEED OFFLINE</div>
@@ -424,18 +525,22 @@ export default function StaffPortal() {
 
               {/* Widescreen config form */}
               <div className="grid grid-cols-2 gap-3 mt-2 border-t border-white/5 pt-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[9px] text-white/40 uppercase">YouTube Video ID</label>
-                  <input
-                    type="text"
-                    value={streamUrl}
-                    onChange={e => {
-                      setStreamUrl(e.target.value);
-                      saveStreamConfig({ url: e.target.value });
-                    }}
-                    placeholder="e.g. dQw4w9WgXcQ"
-                    className="px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none"
-                  />
+                <div className="flex flex-col gap-1 col-span-2">
+                  <label className="text-[9px] text-white/40 uppercase">Stream Source URL / YouTube Link</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={streamUrl}
+                      onChange={e => handleSourceChange(e.target.value)}
+                      placeholder="Paste YouTube ID, full watch link, or direct MP4 URL"
+                      className="flex-grow px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none font-mono"
+                    />
+                    
+                    <label className="px-3.5 py-2 bg-pink-500 hover:bg-pink-400 text-neutral-950 font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-shrink-0">
+                      <Upload size={12} /> Upload MP4
+                      <input type="file" accept="video/mp4" onChange={handleVideoUpload} className="hidden" />
+                    </label>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[9px] text-white/40 uppercase">Viewer Count Override</label>
@@ -525,6 +630,134 @@ export default function StaffPortal() {
                   <Send size={12} className="text-neutral-950" />
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Live Mode — Site-Wide Takeover */}
+        {activeTab === 'live-mode' && (
+          <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Toggle Card */}
+              <div className="bg-white/3 border border-white/5 rounded-2xl p-6 flex flex-col gap-5">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${liveModeConfig.active ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/5 text-white/40 border border-white/10'}`}>
+                    <Radio size={18} className={liveModeConfig.active ? 'animate-pulse' : ''} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-display font-black uppercase tracking-wider text-white">Live Mode Control</h3>
+                    <p className="text-[10px] font-mono text-white/30 mt-0.5">Activates a LIVE NOW banner on the dashboard homepage for all users.</p>
+                  </div>
+                </div>
+
+                {/* Big toggle */}
+                <div className="flex items-center justify-between p-4 bg-neutral-950/60 rounded-xl border border-white/5">
+                  <div>
+                    <p className="text-xs font-bold text-white">{liveModeConfig.active ? '🔴 LIVE MODE IS ON' : '⚫ LIVE MODE IS OFF'}</p>
+                    <p className="text-[10px] font-mono text-white/30 mt-0.5">
+                      {liveModeConfig.active ? `Activated ${liveModeConfig.startedAt ? new Date(liveModeConfig.startedAt).toLocaleTimeString() : ''}` : 'All users see the normal dashboard'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleLiveMode(!liveModeConfig.active)}
+                    className={`relative w-14 h-7 rounded-full border transition-all duration-300 ${liveModeConfig.active ? 'bg-red-500 border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'bg-white/10 border-white/10'}`}
+                  >
+                    <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 ${liveModeConfig.active ? 'left-7' : 'left-0.5'}`} />
+                  </button>
+                </div>
+
+                {/* Quick action buttons */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleToggleLiveMode(true)}
+                    disabled={liveModeConfig.active}
+                    className="flex-1 py-3 bg-red-500 hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2"
+                  >
+                    <Radio size={13} className="animate-pulse" /> GO LIVE
+                  </button>
+                  <button
+                    onClick={() => handleToggleLiveMode(false)}
+                    disabled={!liveModeConfig.active}
+                    className="flex-1 py-3 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed text-white/70 font-bold text-xs rounded-xl transition"
+                  >
+                    END BROADCAST
+                  </button>
+                </div>
+              </div>
+
+              {/* Config Card */}
+              <div className="bg-white/3 border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
+                <h3 className="text-xs font-display font-black uppercase tracking-wider text-white border-b border-white/5 pb-3">Banner Configuration</h3>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-mono text-white/40 uppercase tracking-wider">Banner Title</label>
+                  <input
+                    type="text"
+                    value={liveTitle}
+                    onChange={e => setLiveTitle(e.target.value)}
+                    placeholder="WE ARE LIVE"
+                    className="px-3 py-2.5 bg-neutral-950 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-red-500/50"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-mono text-white/40 uppercase tracking-wider">Banner Subtitle</label>
+                  <input
+                    type="text"
+                    value={liveSubtitle}
+                    onChange={e => setLiveSubtitle(e.target.value)}
+                    placeholder="Maxx Forge Studio is streaming now."
+                    className="px-3 py-2.5 bg-neutral-950 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-red-500/50"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-mono text-white/40 uppercase tracking-wider">YouTube Video ID (optional)</label>
+                  <input
+                    type="text"
+                    value={liveStreamUrl}
+                    onChange={e => setLiveStreamUrl(e.target.value)}
+                    placeholder="e.g. dQw4w9WgXcQ"
+                    className="px-3 py-2.5 bg-neutral-950 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-red-500/50"
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    const cfg = setLiveMode(liveModeConfig.active, { streamUrl: liveStreamUrl, title: liveTitle, subtitle: liveSubtitle });
+                    setLiveModeConfig(cfg);
+                    publish('live_mode_changed', { active: liveModeConfig.active });
+                    toast.success('Banner config saved.');
+                  }}
+                  className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 font-bold text-xs rounded-xl transition"
+                >
+                  Save Config
+                </button>
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="bg-white/3 border border-white/5 rounded-2xl p-5">
+              <h3 className="text-xs font-mono text-white/40 uppercase tracking-wider mb-3">Banner Preview</h3>
+              <div className={`w-full rounded-2xl p-5 border flex flex-col md:flex-row items-center justify-between gap-4 transition-all ${
+                liveModeConfig.active
+                  ? 'bg-gradient-to-r from-red-950/60 via-red-900/30 to-red-950/60 border-red-500/30'
+                  : 'bg-white/3 border-white/10 opacity-50'
+              }`}>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-3 h-3 rounded-full bg-red-500 ${liveModeConfig.active ? 'animate-ping' : ''}`} />
+                    <span className="w-3 h-3 rounded-full bg-red-500 absolute" />
+                  </div>
+                  <div>
+                    <p className="text-base font-display font-black text-white uppercase tracking-wide">{liveTitle}</p>
+                    <p className="text-xs text-white/50 font-light mt-0.5">{liveSubtitle}</p>
+                  </div>
+                </div>
+                <div className="px-5 py-2.5 bg-red-500 rounded-xl text-white font-bold text-xs uppercase tracking-wider">
+                  WATCH LIVE →
+                </div>
+              </div>
             </div>
           </div>
         )}

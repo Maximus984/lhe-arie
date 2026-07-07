@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { getDocs, saveDoc, deleteDoc, getDriveFiles, saveDriveFile, deleteDriveFile, getSlideDecks, saveSlideDeck, deleteSlideDeck, getVaultItems, saveVaultItem, deleteVaultItem } from '../data/workspace.js';
 import { FileText, FolderOpen, Presentation, Database, ArrowLeft, Plus, Save, Trash2, Eye, Play, PlusCircle, Layout, Image, Video, File, X, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import LottiePlayer from '../components/LottiePlayer.jsx';
 
 export default function Workspace() {
   const { currentUser, can } = useAuth();
@@ -27,6 +28,8 @@ export default function Workspace() {
   const [vault, setVault] = useState([]);
   const [activeVaultItem, setActiveVaultItem] = useState(null);
 
+  const location = useLocation();
+
   // Load Data
   useEffect(() => {
     setDocs(getDocs());
@@ -34,6 +37,21 @@ export default function Workspace() {
     setDecks(getSlideDecks());
     setVault(getVaultItems());
   }, [activeTab]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const docId = params.get('docId');
+    if (docId) {
+      const allDocs = getDocs();
+      const found = allDocs.find(d => d.id === docId);
+      if (found) {
+        setActiveDoc(found);
+        setDocTitle(found.title);
+        setDocBody(found.body);
+        setActiveTab('docs');
+      }
+    }
+  }, [location]);
 
   // ---- DOCS HANDLERS ----
   const handleCreateDoc = () => {
@@ -325,7 +343,15 @@ export default function Workspace() {
               {/* Files Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {files.length === 0 ? (
-                  <div className="col-span-full py-16 text-center text-white/20 font-mono text-xs">Drive is currently empty.</div>
+                  <div className="col-span-full py-16 text-center text-white/20 font-mono text-xs flex flex-col items-center justify-center gap-4">
+                    <LottiePlayer
+                      src="/animations/new-google-cloud-icon/animations/new-google-cloud-icon.json"
+                      className="w-28 h-28 opacity-80 animate-pulse"
+                      loop
+                      autoplay
+                    />
+                    <span>Workspace Drive is currently empty.</span>
+                  </div>
                 ) : (
                   files.map(file => (
                     <div key={file.id} className="glass-panel rounded-2xl p-4 flex flex-col justify-between items-start gap-4 hover:border-emerald-500/30 transition group relative">

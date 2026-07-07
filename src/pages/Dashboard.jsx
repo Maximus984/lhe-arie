@@ -10,8 +10,12 @@ import SettingsPanel from '../components/SettingsPanel.jsx';
 import BotChallenge from '../components/BotChallenge.jsx';
 import { shouldShowBotChallenge, startDiagnosticScheduler } from '../data/security.js';
 import AriesPyArcade from '../components/AriesPyArcade.jsx';
+import LottiePlayer from '../components/LottiePlayer.jsx';
 import { AriesCloudStorageNode, AriesLiveAiFlow, DjemKaleidoscopeVisual, GameDevFallingShapes } from '../components/EcosystemAnimations.jsx';
 import { getActiveHeadliner, HEADLINERS } from '../data/headliners.js';
+import { subscribe } from '../data/realtime.js';
+import { isLiveModeActive, getLiveModeConfig } from '../data/liveMode.js';
+import { getDocs, saveDoc } from '../data/workspace.js';
 import { 
   Play, 
   Pause, 
@@ -41,7 +45,13 @@ import {
   Sparkles,
   Link,
   Laptop,
-  Radio
+  Radio,
+  List,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Shield,
+  Menu
 } from 'lucide-react';
 
 
@@ -102,12 +112,31 @@ PLAYLIST[4].src = '/audio/album_dj_em/Shadow Dance (1).mp3';
 
 export default function App() {
   const { currentUser, can } = useAuth();
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('matrix'); // matrix, records, djem, aries, gamedev
   const [accountOpen, setAccountOpen] = useState(false);
   const [favorites, setFavorites] = useState([2]); // Holds indices of tracks marked as favorite
   const [formsOpen, setFormsOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const getBreakpoint = (width) => {
+    if (width < 640) return 'xs (Mobile)';
+    if (width < 768) return 'sm (Large Mobile)';
+    if (width < 1024) return 'md (Tablet)';
+    if (width < 1280) return 'lg (Laptop)';
+    return 'xl (Desktop)';
+  };
   
   // Audio Player State
   const [selectedHeadliner, setSelectedHeadliner] = useState(HEADLINERS[0]);
@@ -119,9 +148,81 @@ export default function App() {
   const [volume, setVolume] = useState(0.85);
   const [isMuted, setIsMuted] = useState(false);
 
+  // Live Mode state
+  const [liveModeConfig, setLiveModeConfig] = useState(getLiveModeConfig);
+
+  // Records fullscreen video: randomize between two videos on each visit
+  const [playlistOpen, setPlaylistOpen] = useState(false);
+  const DESKTOP_VIDEOS = [
+    '/video/headliner_canvases/square_animated_artwork_desktop.mp4',
+    '/video/headliner_canvases/square_animated_artwork_alt.mp4',
+  ];
+  const MOBILE_VIDEOS = [
+    '/video/headliner_canvases/tall_animated_artwork_mobile.mp4',
+    '/video/headliner_canvases/tall_animated_artwork_mobile_alt.mp4',
+  ];
+  const isMobile = window.innerWidth < 768;
+  const [videoSrc] = useState(() => {
+    const pool = isMobile ? MOBILE_VIDEOS : DESKTOP_VIDEOS;
+    return pool[Math.floor(Math.random() * pool.length)];
+  });
+
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
   const [botModal, setBotModal] = useState(false);
+
+  const [announcements, setAnnouncements] = useState(() => {
+    try {
+      const raw = localStorage.getItem('mfs_announcements');
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [
+      {
+        id: 'ann_1',
+        author: 'Maxx — Founder',
+        role: 'founder',
+        text: 'Welcome to the Liquid Glass Ecosystem! Staff can post real-time updates and notes here.',
+        timestamp: new Date().toISOString(),
+      }
+    ];
+  });
+  const [newAnnText, setNewAnnText] = useState('');
+  const [dashboardDocs, setDashboardDocs] = useState([]);
+
+  useEffect(() => {
+    const unsub = subscribe(['announcement_added', 'announcement_deleted'], (event, data) => {
+      if (event === 'announcement_added') {
+        setAnnouncements(prev => {
+          if (prev.find(a => a.id === data.id)) return prev;
+          const updated = [data, ...prev];
+          localStorage.setItem('mfs_announcements', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (event === 'announcement_deleted') {
+        setAnnouncements(prev => {
+          const updated = prev.filter(a => a.id !== data.id);
+          localStorage.setItem('mfs_announcements', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Poll live mode + subscribe to instant BroadcastChannel updates
+  useEffect(() => {
+    const refresh = () => setLiveModeConfig(getLiveModeConfig());
+    refresh();
+    const poll = setInterval(refresh, 3000);
+    const unsub = (typeof BroadcastChannel !== 'undefined')
+      ? (() => {
+          const bc = new BroadcastChannel('mfs_realtime');
+          bc.onmessage = (e) => { if (e.data?.event === 'live_mode_changed') refresh(); };
+          return () => bc.close();
+        })()
+      : () => {};
+    return () => { clearInterval(poll); unsub(); };
+  }, []);
 
   useEffect(() => {
     // Run diagnostics scheduler in the background of active users
@@ -147,6 +248,12 @@ export default function App() {
       clearTimeout(botCheckTimer);
     };
   }, []);
+
+  useEffect(() => {
+    if (activeSection === 'matrix') {
+      setDashboardDocs(getDocs());
+    }
+  }, [activeSection]);
 
   const currentTrack = (activePlaylist && activePlaylist.length > 0)
     ? (activePlaylist[currentTrackIndex] || activePlaylist[0])
@@ -557,9 +664,8 @@ export default function App() {
           </span>
         </div>
 
-        {/* Right Nav buttons */}
-        <div className="flex items-center gap-2 md:gap-3">
-          
+        {/* Right Nav buttons — Desktop only */}
+        <div className="hidden lg:flex items-center gap-2 md:gap-3">
           {/* Main workspace navigation */}
           {can('use_workspace') && (
             <RouterLink 
@@ -601,6 +707,26 @@ export default function App() {
             Forms
           </button>
 
+          {can('view_staff_portal') && (
+            <RouterLink 
+              to="/staff" 
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full text-xs font-semibold hover:bg-pink-500/25 transition"
+            >
+              <Sliders size={12} />
+              <span className="hidden md:inline">Staff Portal</span>
+            </RouterLink>
+          )}
+
+          {can('view_admin') && (
+            <RouterLink 
+              to="/admin" 
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-full text-xs font-semibold hover:bg-violet-500/25 transition"
+            >
+              <Shield size={12} />
+              <span className="hidden md:inline">Admin Panel</span>
+            </RouterLink>
+          )}
+
           {/* Settings Trigger Icon */}
           <button
             onClick={() => setSettingsOpen(true)}
@@ -608,6 +734,22 @@ export default function App() {
             title="Settings"
           >
             <Sliders size={14} />
+          </button>
+        </div>
+
+        {/* Mobile Menu trigger (hidden on desktop) */}
+        <div className="lg:hidden flex items-center gap-2">
+          {isPlaying && (
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_#00e5ff] mr-1" />
+          )}
+          
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 bg-neutral-900/60 border border-white/10 rounded-xl hover:border-moss-green hover:bg-neutral-900 transition duration-300 text-white/70 flex items-center gap-1.5"
+            title="Menu"
+          >
+            <Menu size={15} />
+            <span className="text-[9px] font-mono font-bold tracking-wider">MENU</span>
           </button>
         </div>
       </header>
@@ -624,107 +766,362 @@ export default function App() {
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
               className="flex flex-col gap-10 md:gap-14 animate-ink-bleed"
             >
-              {/* Brand Statement Banner */}
-              <div className="max-w-3xl flex flex-col gap-4 mt-4">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 text-[9px] font-mono tracking-widest bg-moss-green/10 border border-moss-green/30 text-moss-green rounded uppercase font-bold">
-                    System Core v2.0
-                  </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>
-                  <span className="text-xs font-mono text-paper-white-muted uppercase tracking-wider">Obsidian Forge Architecture</span>
-                </div>
-                <h1 className="text-4xl sm:text-6xl md:text-7xl font-display font-black tracking-tighter leading-none">
-                  THE MATRIX <br/>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-moss-green to-cyber-blue">ECOSYSTEM.</span>
-                </h1>
-                <p className="text-base md:text-lg text-paper-white-muted font-light leading-relaxed max-w-xl">
-                  Welcome to the centralized digital matrix of Maxx Forge Studio. Discover, interact, and automate across our interconnected nodes of music synthesis, lighting design, software tools, and gaming systems.
-                </p>
-              </div>
-
-              {/* Portal Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Portal 1: Records */}
-                <div 
-                  onClick={() => setActiveSection('records')}
-                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-cyber-blue hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
-                  id="portal-records"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-cyber-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
-                  <div className="flex justify-between items-start">
-                    <div className="p-3 bg-cyber-blue/10 border border-cyber-blue/20 rounded-xl text-cyber-blue group-hover:scale-110 transition duration-300">
-                      <Disc size={20} className="animate-spin-slow" />
+              {/* Live Mode Banner — staff-activated LIVE NOW takeover */}
+              <AnimatePresence>
+                {liveModeConfig.active && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -16, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -12, scale: 0.97 }}
+                    transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+                    className="w-full rounded-2xl overflow-hidden"
+                    style={{
+                      background: 'linear-gradient(110deg, rgba(127,0,0,0.55) 0%, rgba(80,0,0,0.35) 40%, rgba(127,0,0,0.55) 100%)',
+                      border: '1px solid rgba(239,68,68,0.35)',
+                      boxShadow: '0 0 60px rgba(239,68,68,0.2), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-5 md:p-6">
+                      <div className="flex items-center gap-4">
+                        <div className="relative flex-shrink-0">
+                          <span className="absolute inline-flex w-4 h-4 rounded-full bg-red-500 animate-ping opacity-75" />
+                          <span className="relative inline-flex w-4 h-4 rounded-full bg-red-500 shadow-[0_0_12px_#ef4444]" />
+                        </div>
+                        <div>
+                          <p className="text-base md:text-lg font-display font-black text-white uppercase tracking-wide">
+                            {liveModeConfig.title || 'WE ARE LIVE'}
+                          </p>
+                          <p className="text-xs text-red-200/70 font-light mt-0.5">
+                            {liveModeConfig.subtitle || 'Maxx Forge Studio is streaming now. Click to watch.'}
+                          </p>
+                        </div>
+                      </div>
+                      <RouterLink
+                        to="/live"
+                        className="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-400 text-white font-bold text-sm rounded-xl transition shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_30px_rgba(239,68,68,0.6)]"
+                      >
+                        <Radio size={15} className="animate-pulse" />
+                        WATCH LIVE →
+                      </RouterLink>
                     </div>
-                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 01</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-display font-bold group-hover:text-cyber-blue transition duration-300 mb-2">Prime Records</h3>
-                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
-                      Sleek music visualizer and digital dashboard featuring the 2026 track archives.
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 text-left">
+                {/* Left Column: Statements + Division Cards (8 cols) */}
+                <div className="lg:col-span-8 flex flex-col gap-8 md:gap-10">
+                  
+                  {/* Brand Statement Banner */}
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 text-[9px] font-mono tracking-widest bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded uppercase font-bold">
+                        System Core v3.0
+                      </span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>
+                      <span className="text-xs font-mono text-paper-white-muted uppercase tracking-wider">Liquid Glass Interface Node</span>
+                    </div>
+                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-display font-black tracking-tighter leading-none">
+                      THE MATRIX <br/>
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">ECOSYSTEM.</span>
+                    </h1>
+                    <p className="text-sm md:text-base text-paper-white-muted font-light leading-relaxed max-w-xl">
+                      Welcome to the centralized digital matrix of Maxx Forge Studio. Discover, interact, and automate across our interconnected nodes of music synthesis, lighting design, software tools, and gaming systems.
                     </p>
                   </div>
+
+                  {/* Portal Grid — Roomy 2-column layout */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                    {/* Portal 1: Records */}
+                    <div 
+                      onClick={() => setActiveSection('records')}
+                      className="group relative glass-panel rounded-3xl p-6 flex flex-col gap-6 justify-between cursor-pointer hover:border-cyan-400/40 hover:translate-y-[-4px] transition duration-300 shadow-lg overflow-hidden"
+                      id="portal-records"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-cyan-400/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                      
+                      <div className="flex justify-between items-start">
+                        <div className="p-3 bg-cyan-500/15 border border-cyan-500/30 rounded-2xl text-cyan-400 group-hover:scale-110 transition duration-300">
+                          <Disc size={20} className="animate-spin-slow" />
+                        </div>
+                        <span className="text-[10px] font-mono text-cyan-400/60 font-bold tracking-widest uppercase">Node 01</span>
+                      </div>
+
+                      {/* Animation Preview */}
+                      <div className="h-28 w-full bg-neutral-950/40 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                        <LottiePlayer
+                          src="/animations/glowing-fish-loader.json"
+                          className="w-20 h-20 opacity-80 group-hover:scale-110 transition duration-300"
+                          loop
+                          autoplay
+                        />
+                        <div className="absolute bottom-2 left-3 text-[8px] font-mono text-white/30 uppercase tracking-widest">Master audio stream</div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-display font-bold group-hover:text-cyan-300 transition duration-300 mb-1">Prime Records</h3>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">
+                          Sleek music visualizer and digital dashboard featuring the 2026 track archives.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Portal 2: DJ Em */}
+                    <div 
+                      onClick={() => setActiveSection('djem')}
+                      className="group relative glass-panel rounded-3xl p-6 flex flex-col gap-6 justify-between cursor-pointer hover:border-emerald-400/40 hover:translate-y-[-4px] transition duration-300 shadow-lg overflow-hidden"
+                      id="portal-djem"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-emerald-400/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                      
+                      <div className="flex justify-between items-start">
+                        <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-400 group-hover:scale-110 transition duration-300">
+                          <Zap size={20} />
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400/60 font-bold tracking-widest uppercase">Node 02</span>
+                      </div>
+
+                      {/* Animation Preview */}
+                      <div className="h-28 w-full bg-neutral-950/40 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                        <LottiePlayer
+                          src="/animations/kaleidoscope.json"
+                          className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition duration-300"
+                          loop
+                          autoplay
+                        />
+                        <div className="absolute bottom-2 left-3 text-[8px] font-mono text-white/30 uppercase tracking-widest">TouchDesigner matrix</div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-display font-bold group-hover:text-emerald-300 transition duration-300 mb-1">DJ Em Live Events</h3>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">
+                          Dynamic stage light rig mixers, DMX controller simulations, and event booking.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Portal 3: Aries Tech */}
+                    <div 
+                      onClick={() => setActiveSection('aries')}
+                      className="group relative glass-panel rounded-3xl p-6 flex flex-col gap-6 justify-between cursor-pointer hover:border-indigo-400/40 hover:translate-y-[-4px] transition duration-300 shadow-lg overflow-hidden"
+                      id="portal-aries"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-indigo-400/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                      
+                      <div className="flex justify-between items-start">
+                        <div className="p-3 bg-indigo-500/15 border border-indigo-500/30 rounded-2xl text-indigo-400 group-hover:scale-110 transition duration-300">
+                          <Cpu size={20} />
+                        </div>
+                        <span className="text-[10px] font-mono text-indigo-400/60 font-bold tracking-widest uppercase">Node 03</span>
+                      </div>
+
+                      {/* Animation Preview */}
+                      <div className="h-28 w-full bg-neutral-950/40 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                        <LottiePlayer
+                          src="/animations/ai-animation-flow-1.json"
+                          className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition duration-300"
+                          loop
+                          autoplay
+                        />
+                        <div className="absolute bottom-2 left-3 text-[8px] font-mono text-white/30 uppercase tracking-widest">Ollama context stream</div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-display font-bold group-hover:text-indigo-300 transition duration-300 mb-1">Aries AI & Software</h3>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">
+                          Local Ollama LLM terminal consoles and the September 2026 rollout node.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Portal 4: Game Dev */}
+                    <div 
+                      onClick={() => setActiveSection('gamedev')}
+                      className="group relative glass-panel rounded-3xl p-6 flex flex-col gap-6 justify-between cursor-pointer hover:border-red-400/40 hover:translate-y-[-4px] transition duration-300 shadow-lg overflow-hidden"
+                      id="portal-gamedev"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-red-400/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
+                      
+                      <div className="flex justify-between items-start">
+                        <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-2xl text-red-400 group-hover:scale-110 transition duration-300">
+                          <Gamepad2 size={20} />
+                        </div>
+                        <span className="text-[10px] font-mono text-red-400/60 font-bold tracking-widest uppercase">Node 04</span>
+                      </div>
+
+                      {/* Animation Preview */}
+                      <div className="h-28 w-full bg-neutral-950/40 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                        <LottiePlayer
+                          src="/animations/falling-shapes/a/Main Scene.json"
+                          assetsPath="/animations/falling-shapes/i/"
+                          className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition duration-300"
+                          loop
+                          autoplay
+                        />
+                        <div className="absolute bottom-2 left-3 text-[8px] font-mono text-white/30 uppercase tracking-widest">Physics engine sandbox</div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-display font-bold group-hover:text-red-300 transition duration-300 mb-1">Game Development</h3>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">
+                          Survival horror cinematic visuals, media grids, and interactive demo runs.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Workspace Documents Quick Launcher */}
+                  <div className="glass-panel rounded-3xl p-6 border border-white/10 flex flex-col gap-5">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                      <div className="flex items-center gap-2">
+                        <FileText className="text-emerald-400" size={18} />
+                        <h3 className="text-sm font-display font-bold uppercase text-white">Workspace Documents</h3>
+                      </div>
+                      {can('create_docs') && (
+                        <button
+                          onClick={() => {
+                            const newDoc = { title: 'Untitled Document', body: '', author: currentUser?.displayName || currentUser?.name || 'Maxx' };
+                            const updated = saveDoc(newDoc);
+                            const created = updated[0];
+                            toast.success('Document created!');
+                            navigate(`/workspace?docId=${created.id}`);
+                          }}
+                          className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                        >
+                          <PlusCircle size={12} /> Create Doc
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {dashboardDocs.slice(0, 3).map(doc => (
+                        <div
+                          key={doc.id}
+                          onClick={() => navigate(`/workspace?docId=${doc.id}`)}
+                          className="p-3.5 bg-white/3 border border-white/5 hover:border-emerald-500/30 rounded-2xl cursor-pointer hover:bg-white/5 transition flex flex-col gap-2 justify-between"
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400 font-bold">
+                              <FileText size={16} />
+                            </div>
+                            <div className="text-left">
+                              <p className="text-xs font-bold text-white truncate max-w-[130px]">{doc.title}</p>
+                              <p className="text-[9px] font-mono text-white/30 mt-0.5">Updated {new Date(doc.updatedAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <span className="text-[8px] font-mono text-white/40 uppercase tracking-widest text-right">Edit →</span>
+                        </div>
+                      ))}
+                      {dashboardDocs.length === 0 && (
+                        <p className="col-span-full text-center text-xs font-mono text-white/20 py-6">No documents found. Create one above!</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Portal 2: DJ Em */}
-                <div 
-                  onClick={() => setActiveSection('djem')}
-                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-moss-green hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
-                  id="portal-djem"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-moss-green/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
-                  <div className="flex justify-between items-start">
-                    <div className="p-3 bg-moss-green/10 border border-moss-green/20 rounded-xl text-moss-green group-hover:scale-110 transition duration-300">
-                      <Zap size={20} />
+                {/* Right Column: Announcements & Notes Bulletin (4 cols) */}
+                <div className="lg:col-span-4 flex flex-col gap-6">
+                  <div className="glass-panel rounded-3xl p-6 flex flex-col gap-5 border border-white/10" style={{ minHeight: '480px' }}>
+                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#a5f3fc]" />
+                        <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Ecosystem Bulletin</h3>
+                      </div>
+                      <span className="text-[9px] font-mono text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded border border-cyan-400/20 uppercase font-bold tracking-widest">Notes</span>
                     </div>
-                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 02</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-display font-bold group-hover:text-moss-green transition duration-300 mb-2">DJ Em Live Events</h3>
-                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
-                      Dynamic stage light rig mixers, DMX controller simulations, and event booking.
-                    </p>
-                  </div>
-                </div>
 
-                {/* Portal 3: Aries Tech */}
-                <div 
-                  onClick={() => setActiveSection('aries')}
-                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-cyber-blue hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
-                  id="portal-aries"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-cyber-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
-                  <div className="flex justify-between items-start">
-                    <div className="p-3 bg-cyber-blue/10 border border-cyber-blue/20 rounded-xl text-cyber-blue group-hover:scale-110 transition duration-300">
-                      <Cpu size={20} />
-                    </div>
-                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 03</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-display font-bold group-hover:text-cyber-blue transition duration-300 mb-2">Aries AI & Software</h3>
-                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
-                      Local Ollama LLM terminal consoles and the September 2026 rollout node.
-                    </p>
-                  </div>
-                </div>
+                    {/* Announcement input for staff/founder */}
+                    {currentUser && (can('view_staff_portal') || can('toggle_maintenance')) && (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!newAnnText.trim()) return;
+                          const newAnn = {
+                            id: `ann_${Date.now()}`,
+                            author: currentUser.displayName || currentUser.name,
+                            role: currentUser.role,
+                            text: newAnnText.trim(),
+                            timestamp: new Date().toISOString()
+                          };
+                          const updated = [newAnn, ...announcements];
+                          setAnnouncements(updated);
+                          localStorage.setItem('mfs_announcements', JSON.stringify(updated));
+                          publish('announcement_added', newAnn);
+                          setNewAnnText('');
+                          toast.success('Announcement broadcasted!');
+                        }}
+                        className="flex flex-col gap-2 p-3 bg-white/5 rounded-2xl border border-white/5 text-left"
+                      >
+                        <span className="text-[9px] font-mono text-white/30 uppercase tracking-widest">Create Announcement</span>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newAnnText}
+                            onChange={(e) => setNewAnnText(e.target.value)}
+                            placeholder="Add a notes update..."
+                            className="flex-grow px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white placeholder-white/20 focus:outline-none focus:border-cyan-500/50"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!newAnnText.trim()}
+                            className="px-3 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:hover:bg-cyan-400 text-neutral-950 font-bold rounded-xl text-xs flex items-center justify-center transition"
+                          >
+                            Post
+                          </button>
+                        </div>
+                      </form>
+                    )}
 
-                {/* Portal 4: Game Dev */}
-                <div 
-                  onClick={() => setActiveSection('gamedev')}
-                  className="group relative glass-panel rounded-2xl p-6 flex flex-col gap-12 justify-between cursor-pointer hover:border-red-500 hover:translate-y-[-6px] transition duration-300 shadow-xl overflow-hidden"
-                  id="portal-gamedev"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300" />
-                  <div className="flex justify-between items-start">
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 group-hover:scale-110 transition duration-300">
-                      <Gamepad2 size={20} />
+                    {/* Announcements List */}
+                    <div className="flex-grow overflow-y-auto flex flex-col gap-3 max-h-[360px] pr-1">
+                      {announcements.length === 0 ? (
+                        <p className="text-center text-xs font-mono text-white/25 py-8">No announcements at the moment.</p>
+                      ) : (
+                        announcements.map((ann) => {
+                          const isStaff = ann.role === 'staff' || ann.role === 'founder';
+                          return (
+                            <motion.div
+                              key={ann.id}
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="p-3 bg-white/3 border border-white/5 rounded-2xl flex flex-col gap-1.5 hover:bg-white/5 transition"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-1.5 py-0.5 rounded-[4px] text-[8px] font-mono uppercase font-bold border ${
+                                  ann.role === 'founder' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                  ann.role === 'staff' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                                  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                }`}>
+                                  {ann.role}
+                                </span>
+                                <span className="font-bold text-white/80 font-mono text-[10px]">{ann.author}</span>
+                                <span className="text-[8px] text-white/25 font-mono ml-auto">
+                                  {new Date(ann.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                
+                                {/* Delete button for authorized staff */}
+                                {currentUser && (can('view_staff_portal') || can('toggle_maintenance')) && (
+                                  <button
+                                    onClick={() => {
+                                      const updated = announcements.filter(a => a.id !== ann.id);
+                                      setAnnouncements(updated);
+                                      localStorage.setItem('mfs_announcements', JSON.stringify(updated));
+                                      publish('announcement_deleted', { id: ann.id });
+                                      toast.success('Announcement deleted');
+                                    }}
+                                    className="p-1 hover:text-red-400 transition"
+                                    title="Delete announcement"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-white/60 leading-relaxed font-light break-words">{ann.text}</p>
+                            </motion.div>
+                          );
+                        })
+                      )}
                     </div>
-                    <span className="text-xs font-mono text-paper-white-dim font-bold">Node 04</span>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-display font-bold group-hover:text-red-500 transition duration-300 mb-2">Game Development</h3>
-                    <p className="text-xs text-paper-white-muted font-light leading-relaxed">
-                      Survival horror cinematic visuals, media grids, and interactive demo runs.
-                    </p>
                   </div>
                 </div>
               </div>
@@ -740,149 +1137,201 @@ export default function App() {
               transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10"
             >
-              {/* Music Player Panel */}
-              <div className="lg:col-span-7 glass-panel rounded-3xl p-6 md:p-8 flex flex-col gap-6 glow-blue">
-                <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                  <div className="flex items-center gap-3">
-                    <Disc className={`text-cyber-blue ${isPlaying ? 'animate-spin' : ''}`} size={20} style={{ animationDuration: '4s' }} />
-                    <span className="text-sm font-display font-bold tracking-wider uppercase text-cyber-blue">Prime Records Suite</span>
-                  </div>
-                  <span className="px-2.5 py-1 rounded bg-cyber-blue/10 border border-cyber-blue/20 text-[9px] font-mono text-cyber-blue font-bold">
-                    AUDIO MASTER STREAM
-                  </span>
-                </div>
+              {/* Music Player Panel — Fullscreen Video */}
+              <div className="lg:col-span-7 relative rounded-3xl overflow-hidden glow-blue" style={{ minHeight: '520px' }}>
+                {/* Fullscreen background video */}
+                <video
+                  key={videoSrc}
+                  src={videoSrc}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{
+                    filter: isPlaying ? 'brightness(0.9)' : 'brightness(0.65)',
+                    transition: 'filter 0.6s ease',
+                  }}
+                />
 
-                {/* ── Animated Artwork Canvas ── */}
-                <div className="relative flex flex-col items-center gap-4 py-4">
-                  {/* Outer glow aura — does NOT overlap the video */}
+                {/* Dark gradient overlay at bottom for readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
+
+                {/* Playing glow pulse when active */}
+                {isPlaying && (
                   <div
-                    className="relative rounded-2xl overflow-hidden"
+                    className="absolute inset-0 pointer-events-none"
                     style={{
-                      boxShadow: isPlaying
-                        ? `0 0 0 2px ${selectedHeadliner.accentColor}60, 0 0 40px ${selectedHeadliner.accentColor}50, 0 0 80px ${selectedHeadliner.accentColor}25`
-                        : '0 0 0 1px rgba(255,255,255,0.06)',
+                      boxShadow: `inset 0 0 60px ${selectedHeadliner.accentColor}30`,
                       transition: 'box-shadow 0.6s ease',
                     }}
-                  >
-                    {/* Ambient corner rays — around the video, not on top */}
-                    {isPlaying && (
-                      <>
-                        <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.35 }} />
-                        <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.35 }} />
-                        <div className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.25 }} />
-                        <div className="absolute -bottom-4 -right-4 w-16 h-16 rounded-full blur-2xl pointer-events-none" style={{ background: selectedHeadliner.accentColor, opacity: 0.25 }} />
-                      </>
-                    )}
-
-                    {/* Responsive video — mobile gets portrait canvas, desktop gets square */}
-                    <video
-                      key={selectedHeadliner.id}
-                      src={window.innerWidth < 768
-                        ? '/video/headliner_canvases/tall_animated_artwork_mobile.mp4'
-                        : '/video/headliner_canvases/square_animated_artwork_desktop.mp4'
-                      }
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="block w-full max-w-xs md:max-w-sm object-cover rounded-xl"
-                      style={{ aspectRatio: window.innerWidth < 768 ? '9/16' : '1/1', maxHeight: '280px' }}
-                    />
-                  </div>
-
-                  {/* Track info below canvas */}
-                  <div className="flex flex-col items-center md:items-start gap-2 text-center md:text-left w-full">
-                    <h2 className="text-xl md:text-2xl font-display font-bold text-paper-white tracking-tight leading-tight">{currentTrack?.title || '—'}</h2>
-                    <span className="text-sm font-mono font-semibold" style={{ color: selectedHeadliner.accentColor }}>{currentTrack?.artist || '—'}</span>
-
-                    {/* Quest progress nudge */}
-                    <div className="flex items-center gap-2 mt-1 px-2.5 py-1 rounded-lg border border-white/5 bg-white/3 text-[9px] font-mono text-white/40">
-                      <span>🎧</span>
-                      <span>LISTEN TO UNLOCK BADGES & BANNERS · TIED TO YOUR ACCOUNT</span>
-                    </div>
-
-                    <div className="flex items-center gap-3 mt-1">
-                      <button
-                        onClick={() => toggleFavorite(currentTrack?.id)}
-                        className={`p-2 rounded-full border transition duration-300 ${favorites.includes(currentTrack?.id) ? 'bg-red-500/10 border-red-500/40 text-red-500' : 'bg-white/5 border-white/10 text-paper-white-muted hover:border-red-500/50 hover:text-red-500'}`}
-                        title="Save to favorites"
-                        id="btn-audio-fav"
-                      >
-                        <Heart size={14} fill={favorites.includes(currentTrack?.id) ? 'currentColor' : 'none'} />
-                      </button>
-                      <span className="text-[10px] font-mono text-paper-white-dim">Track {currentTrackIndex + 1}/{activePlaylist.length} · RADIO LOOP ON</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress bar controller */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between text-xs font-mono text-paper-white-muted">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration || 100}
-                    value={currentTime}
-                    onChange={handleScrubChange}
-                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyber-blue"
-                    id="slider-audio-progress"
                   />
+                )}
+
+                {/* Top bar: Section label + playlist toggle */}
+                <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
+                  <div className="flex items-center gap-3">
+                    <Disc className={`text-cyber-blue ${isPlaying ? 'animate-spin' : ''}`} size={18} style={{ animationDuration: '4s' }} />
+                    <span className="text-sm font-display font-bold tracking-wider uppercase text-cyber-blue">Prime Records Suite</span>
+                    <span className="px-2.5 py-1 rounded bg-cyber-blue/10 border border-cyber-blue/20 text-[9px] font-mono text-cyber-blue font-bold">
+                      AUDIO MASTER STREAM
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setPlaylistOpen(o => !o)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/50 border border-white/10 text-xs font-mono text-white/70 hover:text-white hover:border-cyber-blue/50 transition backdrop-blur-sm"
+                    title="Toggle playlist"
+                  >
+                    <List size={13} />
+                    {playlistOpen ? 'Hide' : 'Tracks'}
+                    {playlistOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 </div>
 
-                {/* Player button row */}
-                <div className="flex flex-wrap items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleSkipBackward}
-                      className="p-3 bg-neutral-950/40 border border-white/5 rounded-xl hover:bg-neutral-900 hover:text-cyber-blue transition duration-300"
-                      title="Previous Track"
-                      id="btn-audio-prev"
+                {/* Floating Playlist Drawer */}
+                <AnimatePresence>
+                  {playlistOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 20 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                      className="absolute top-14 right-4 w-72 max-h-64 overflow-y-auto z-20 rounded-2xl border border-white/10 backdrop-blur-2xl"
+                      style={{ background: 'rgba(5,5,8,0.92)' }}
                     >
-                      <SkipBack size={18} />
-                    </button>
-                    <button
-                      onClick={handlePlayPause}
-                      className="p-4 bg-cyber-blue text-neutral-950 rounded-xl hover:bg-cyan-300 transition duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
-                      title={isPlaying ? "Pause" : "Play"}
-                      id="btn-audio-play"
-                    >
-                      {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-                    </button>
-                    <button
-                      onClick={handleSkipForward}
-                      className="p-3 bg-neutral-950/40 border border-white/5 rounded-xl hover:bg-neutral-900 hover:text-cyber-blue transition duration-300"
-                      title="Next Track"
-                      id="btn-audio-next"
-                    >
-                      <SkipForward size={18} />
-                    </button>
+                      <div className="p-3 flex flex-col gap-1.5">
+                        <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider px-1 mb-1">
+                          {selectedHeadliner.album} — Playlist
+                        </p>
+                        {activePlaylist.map((track, index) => {
+                          const isCurrent = index === currentTrackIndex;
+                          return (
+                            <button
+                              key={track.id}
+                              onClick={() => { setCurrentTrackIndex(index); setIsPlaying(true); setPlaylistOpen(false); }}
+                              className={`flex items-center gap-2 p-2.5 rounded-xl border text-left w-full transition text-xs ${
+                                isCurrent
+                                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400'
+                                  : 'bg-white/3 border-white/5 text-white/60 hover:bg-white/8 hover:text-white hover:border-white/10'
+                              }`}
+                            >
+                              <span className="font-mono text-[9px] w-4 flex-shrink-0 text-white/30">{(index + 1).toString().padStart(2, '0')}</span>
+                              <span className="truncate font-semibold">{track.title}</span>
+                              {isCurrent && isPlaying && (
+                                <span className="ml-auto flex gap-px items-end h-3">
+                                  {[1,2,3].map(i => (
+                                    <motion.span
+                                      key={i}
+                                      className="w-[2px] rounded-full bg-cyan-400"
+                                      animate={{ height: ['4px','10px','4px'] }}
+                                      transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+                                    />
+                                  ))}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Bottom: Track info + controls floating over video */}
+                <div className="absolute bottom-0 left-0 right-0 z-10 p-5 flex flex-col gap-3">
+                  {/* Track info */}
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-xl md:text-2xl font-display font-bold text-white tracking-tight leading-tight drop-shadow">
+                        {currentTrack?.title || '—'}
+                      </h2>
+                      <span className="text-sm font-mono font-semibold drop-shadow" style={{ color: selectedHeadliner.accentColor }}>
+                        {currentTrack?.artist || '—'}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/5 bg-black/40 text-[9px] font-mono text-white/40 backdrop-blur-sm">
+                          <span>🎧</span>
+                          <span>LISTEN TO UNLOCK BADGES · TIED TO YOUR ACCOUNT</span>
+                        </div>
+                        <button
+                          onClick={() => toggleFavorite(currentTrack?.id)}
+                          className={`p-1.5 rounded-full border transition duration-300 ${favorites.includes(currentTrack?.id) ? 'bg-red-500/15 border-red-500/40 text-red-400' : 'bg-black/40 border-white/10 text-white/40 hover:text-red-400 hover:border-red-500/40'}`}
+                          title="Save to favorites"
+                          id="btn-audio-fav"
+                        >
+                          <Heart size={13} fill={favorites.includes(currentTrack?.id) ? 'currentColor' : 'none'} />
+                        </button>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-white/30">Track {currentTrackIndex + 1}/{activePlaylist.length}</span>
                   </div>
 
-                  {/* Volume Control */}
-                  <div className="flex items-center gap-3 bg-neutral-950/40 px-4 py-2.5 rounded-xl border border-white/5">
-                    <button 
-                      onClick={() => setIsMuted(!isMuted)}
-                      className="text-paper-white-muted hover:text-cyber-blue transition"
-                      id="btn-audio-mute"
-                    >
-                      {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                    </button>
+                  {/* Progress bar */}
+                  <div className="flex flex-col gap-1.5">
                     <input
                       type="range"
                       min="0"
-                      max="1"
-                      step="0.01"
-                      value={volume}
-                      onChange={(e) => {
-                        setVolume(parseFloat(e.target.value));
-                        setIsMuted(false);
-                      }}
-                      className="w-20 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyber-blue"
-                      id="slider-audio-volume"
+                      max={duration || 100}
+                      value={currentTime}
+                      onChange={handleScrubChange}
+                      className="w-full h-1 bg-white/15 rounded-lg appearance-none cursor-pointer accent-cyber-blue"
+                      id="slider-audio-progress"
                     />
+                    <div className="flex justify-between text-[10px] font-mono text-white/30">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                  </div>
+
+                  {/* Player controls row */}
+                  <div className="flex items-center justify-between gap-3 bg-black/50 backdrop-blur-xl p-3 rounded-2xl border border-white/8">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSkipBackward}
+                        className="p-2.5 bg-white/5 border border-white/8 rounded-xl hover:bg-white/10 hover:text-cyber-blue transition"
+                        title="Previous Track"
+                        id="btn-audio-prev"
+                      >
+                        <SkipBack size={16} />
+                      </button>
+                      <button
+                        onClick={handlePlayPause}
+                        className="p-3 bg-cyber-blue text-neutral-950 rounded-xl hover:bg-cyan-300 transition hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,229,255,0.5)]"
+                        title={isPlaying ? "Pause" : "Play"}
+                        id="btn-audio-play"
+                      >
+                        {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+                      </button>
+                      <button
+                        onClick={handleSkipForward}
+                        className="p-2.5 bg-white/5 border border-white/8 rounded-xl hover:bg-white/10 hover:text-cyber-blue transition"
+                        title="Next Track"
+                        id="btn-audio-next"
+                      >
+                        <SkipForward size={16} />
+                      </button>
+                    </div>
+
+                    {/* Volume */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsMuted(!isMuted)}
+                        className="text-white/50 hover:text-cyber-blue transition"
+                        id="btn-audio-mute"
+                      >
+                        {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                      </button>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={volume}
+                        onChange={(e) => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
+                        className="w-20 h-1 bg-white/15 rounded-lg appearance-none cursor-pointer accent-cyber-blue"
+                        id="slider-audio-volume"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1176,6 +1625,133 @@ export default function App() {
 
       {/* Bot Verification Challenge */}
       <BotChallenge isOpen={botModal} onSuccess={() => setBotModal(false)} />
+
+      {/* Mobile Menu Overlay Drawer */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-md z-[900]"
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="fixed top-0 right-0 bottom-0 w-full max-w-xs bg-obsidian-void/95 border-l border-white/10 z-[950] p-6 flex flex-col justify-between"
+              style={{ background: 'rgba(8, 8, 12, 0.98)', backdropFilter: 'blur(30px)' }}
+            >
+              <div className="flex flex-col gap-6 text-left">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#a5f3fc]" />
+                    <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">NAV MATRIX</span>
+                  </div>
+                  <button onClick={() => setMobileMenuOpen(false)} className="p-1.5 hover:bg-white/5 rounded-lg text-white/50 hover:text-white transition">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* Navigation Links */}
+                <div className="flex flex-col gap-3">
+                  {can('use_workspace') && (
+                    <RouterLink
+                      to="/workspace"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs font-bold hover:bg-emerald-500/20 transition"
+                    >
+                      <FileText size={14} />
+                      Workspace
+                    </RouterLink>
+                  )}
+                  <RouterLink
+                    to="/feed"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl text-xs font-bold hover:bg-indigo-500/20 transition"
+                  >
+                    <MessageSquare size={14} />
+                    Forge Feed
+                  </RouterLink>
+                  <RouterLink
+                    to="/live"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 transition"
+                  >
+                    <Radio size={14} className="animate-pulse" />
+                    Live Theater
+                  </RouterLink>
+
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); setCalendarOpen(true); }}
+                    className="flex items-center gap-3 p-3 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-xl text-xs font-bold text-left hover:bg-cyan-500/20 transition"
+                  >
+                    <Calendar size={14} />
+                    Calendar
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); setFormsOpen(true); }}
+                    className="flex items-center gap-3 p-3 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-xl text-xs font-bold text-left hover:bg-pink-500/20 transition"
+                  >
+                    <Sliders size={14} />
+                    Forms Center
+                  </button>
+
+                  {can('view_staff_portal') && (
+                    <RouterLink
+                      to="/staff"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-xl text-xs font-bold hover:bg-pink-500/20 transition"
+                    >
+                      <Sliders size={14} />
+                      Staff Portal
+                    </RouterLink>
+                  )}
+                  {can('view_admin') && (
+                    <RouterLink
+                      to="/admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-xl text-xs font-bold hover:bg-violet-500/20 transition"
+                    >
+                      <Shield size={14} />
+                      Admin Panel
+                    </RouterLink>
+                  )}
+                </div>
+              </div>
+
+              {/* Settings shortcut at the bottom */}
+              <button
+                onClick={() => { setMobileMenuOpen(false); setSettingsOpen(true); }}
+                className="flex items-center justify-between p-3.5 bg-white/5 border border-white/10 rounded-2xl text-xs font-bold hover:bg-white/10 transition mt-6 text-white/80"
+              >
+                <div className="flex items-center gap-2">
+                  <Sliders size={14} className="text-moss-green" />
+                  Settings Panel
+                </div>
+                <span className="text-[10px] font-mono text-white/30">Edit Profile</span>
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Viewport Dimension HUD */}
+      <div 
+        className="fixed bottom-24 right-6 z-40 px-3 py-1.5 rounded-full border bg-neutral-950/80 backdrop-blur border-cyan-500/30 text-cyan-400 font-mono text-[9px] flex items-center gap-2 hover:bg-neutral-950 transition cursor-pointer select-none"
+        title="Responsive Viewport Helper"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_#00e5ff]" />
+        <span>Breakpoint: {getBreakpoint(viewport.width)}</span>
+        <span className="text-white/20">|</span>
+        <span>Resolution: {viewport.width}px × {viewport.height}px</span>
+      </div>
     </div>
   );
 }

@@ -167,6 +167,26 @@ export const initializeUsers = () => {
   const existing = localStorage.getItem('mfs_users');
   if (!existing) {
     localStorage.setItem('mfs_users', JSON.stringify(SEED_USERS));
+  } else {
+    // Always sync seed users' credentials from env vars so .env changes take effect immediately
+    try {
+      const users = JSON.parse(existing);
+      let changed = false;
+      const synced = users.map(u => {
+        const seed = SEED_USERS.find(s => s.id === u.id);
+        if (seed && (u.email !== seed.email || u.password !== seed.password)) {
+          changed = true;
+          return { ...u, email: seed.email, password: seed.password };
+        }
+        return u;
+      });
+      if (changed) {
+        localStorage.setItem('mfs_users', JSON.stringify(synced));
+      }
+    } catch (e) {
+      // If parse fails, re-seed fresh
+      localStorage.setItem('mfs_users', JSON.stringify(SEED_USERS));
+    }
   }
 };
 

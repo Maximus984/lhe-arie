@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Eye, EyeOff, Lock, User, AlertCircle, UserPlus, Globe, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle, UserPlus, Globe, Sparkles, Fingerprint, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import LottiePlayer from '../components/LottiePlayer.jsx';
 
@@ -164,6 +164,43 @@ export default function Login() {
   const [regError, setRegError] = useState('');
   const [regStep, setRegStep] = useState(1); // 1 = form, 2 = avatar picker
 
+  // Biometric States
+  const [biometricScan, setBiometricScan] = useState(false);
+  const [biometricStatus, setBiometricStatus] = useState('READY'); // READY | SELECTING | SCANNING | SUCCESS
+  const [selectedBiometricUser, setSelectedBiometricUser] = useState(null);
+
+  const handleBiometricClick = () => {
+    setBiometricScan(true);
+    setBiometricStatus('SELECTING');
+  };
+
+  const triggerBiometricScan = async (userType) => {
+    setSelectedBiometricUser(userType);
+    setBiometricStatus('SCANNING');
+    
+    await new Promise(resolve => setTimeout(resolve, 1800));
+    
+    let result;
+    if (userType === 'founder') {
+      result = await login('founder@maxxforge.com', 'founder2026');
+    } else if (userType === 'staff') {
+      result = await login('staff@maxxforge.com', 'staff2026');
+    } else {
+      result = await login('member@maxxforge.com', 'member2026');
+    }
+
+    if (result.success) {
+      setBiometricStatus('SUCCESS');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setBiometricScan(false);
+      toast.success(`Biometric Signature Verified! Welcome, ${result.user.name}.`);
+      navigate('/dashboard');
+    } else {
+      setBiometricStatus('READY');
+      toast.error('Passkey signature validation error.');
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) { setLoginError('Please fill in all fields.'); return; }
@@ -319,6 +356,18 @@ export default function Login() {
                         </motion.button>
                       </form>
 
+                      <motion.button
+                        id="biometric-login-btn"
+                        type="button"
+                        onClick={handleBiometricClick}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        style={{ ...styles.biometricBtn, marginTop: '8px' }}
+                      >
+                        <Fingerprint size={13} />
+                        SIGN IN WITH BIOMETRICS / PASSKEY
+                      </motion.button>
+
                       <div style={styles.orRow}>
                         <div style={styles.orLine} /><span style={styles.orText}>OR</span><div style={styles.orLine} />
                       </div>
@@ -461,6 +510,88 @@ export default function Login() {
                   )}
                 </AnimatePresence>
               </div>
+      {/* Biometric Scanning Simulation Modal Overlay */}
+      <AnimatePresence>
+        {biometricScan && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 15 }}
+              className="w-full max-w-sm bg-neutral-905 border border-white/10 rounded-3xl p-6 flex flex-col items-center gap-6 text-center shadow-2xl relative overflow-hidden"
+              style={{ background: 'rgba(12, 12, 16, 0.96)' }}
+            >
+              {/* Animated scanning rings backplate */}
+              <div className="absolute inset-0 bg-radial-gradient from-cyan-500/5 to-transparent pointer-events-none" />
+
+              {/* Close Button */}
+              {biometricStatus !== 'SCANNING' && (
+                <button
+                  onClick={() => setBiometricScan(false)}
+                  className="absolute top-4 right-4 p-1.5 hover:bg-white/5 rounded-lg text-white/40 hover:text-white transition"
+                >
+                  <X size={15} />
+                </button>
+              )}
+
+              {/* Biometric Status Icon/Animation */}
+              <div className="relative w-28 h-28 flex items-center justify-center mt-2">
+                <div className="absolute inset-0 rounded-full border border-cyan-500/20 animate-ping" style={{ animationDuration: '3s' }} />
+                <div className="absolute inset-2 rounded-full border border-cyan-500/10 animate-pulse" />
+                
+                {biometricStatus === 'SCANNING' ? (
+                  <div className="text-cyan-400 animate-pulse flex flex-col items-center justify-center">
+                    <Fingerprint size={48} className="animate-bounce" />
+                    <div className="absolute bottom-[-15px] text-[8px] font-mono tracking-widest text-cyan-400/60 uppercase">SCANNING...</div>
+                  </div>
+                ) : biometricStatus === 'SUCCESS' ? (
+                  <div className="text-emerald-400 scale-110 transition duration-300">
+                    <CheckCircle2 size={54} />
+                  </div>
+                ) : (
+                  <div className="text-cyan-500/80">
+                    <Fingerprint size={48} />
+                  </div>
+                )}
+              </div>
+
+              {/* Text Context */}
+              <div>
+                <h3 className="text-sm font-display font-bold uppercase tracking-wider text-white">
+                  {biometricStatus === 'SELECTING' ? 'Select passkey credentials' : biometricStatus === 'SCANNING' ? 'Verifying secure identity' : 'Authentication Successful'}
+                </h3>
+                <p className="text-[10px] font-mono text-white/40 mt-1">
+                  {biometricStatus === 'SELECTING' ? 'Select a saved biometric profile simulation' : biometricStatus === 'SCANNING' ? `Simulating WebAuthn key sweep for ${selectedBiometricUser.toUpperCase()}` : 'Enclave signature verified successfully.'}
+                </p>
+              </div>
+
+              {/* Option Grid */}
+              {biometricStatus === 'SELECTING' && (
+                <div className="flex flex-col gap-2 w-full mt-2">
+                  {[
+                    { id: 'founder', name: 'Founder Profile', details: 'Face ID · founder@maxxforge.com' },
+                    { id: 'staff', name: 'Staff Profile', details: 'Fingerprint · staff@maxxforge.com' },
+                    { id: 'member', name: 'Member Profile', details: 'Touch ID · member@maxxforge.com' }
+                  ].map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => triggerBiometricScan(user.id)}
+                      className="w-full p-3 bg-white/3 border border-white/5 hover:border-cyan-500/40 rounded-2xl text-left hover:bg-white/5 transition flex justify-between items-center group"
+                    >
+                      <div>
+                        <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition">{user.name}</p>
+                        <p className="text-[9px] font-mono text-white/30 mt-0.5">{user.details}</p>
+                      </div>
+                      <span className="text-[9px] font-mono text-cyan-400 opacity-0 group-hover:opacity-100 transition font-bold">Scan →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -524,6 +655,7 @@ const styles = {
   orLine: { flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.07)' },
   orText: { fontSize: '11px', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em' },
   guestBtn: { width: '100%', padding: '12px', marginBottom: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' },
+  biometricBtn: { width: '100%', padding: '12px', marginBottom: '10px', background: 'rgba(0, 229, 255, 0.05)', border: '1px solid rgba(0, 229, 255, 0.25)', borderRadius: '8px', color: '#00e5ff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.1em' },
   forgotBtn: { width: '100%', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.18em', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.2s', fontFamily: "'Inter',sans-serif" },
 };
 
