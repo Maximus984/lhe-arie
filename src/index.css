@@ -253,3 +253,143 @@ body {
   --accent-secondary: #228822;
 }
 
+/* =====================================================
+   LIQUID GLASS THEME
+   Apple-inspired frosted translucent surface mode
+   ===================================================== */
+
+@keyframes glass-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes glass-float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-4px) scale(1.004); }
+}
+
+@keyframes iridescent-shift {
+  0%   { filter: hue-rotate(0deg) brightness(1.0); }
+  50%  { filter: hue-rotate(20deg) brightness(1.08); }
+  100% { filter: hue-rotate(0deg) brightness(1.0); }
+}
+
+[data-theme="liquid-glass"] {
+  /* ---- Root background: deep midnight glass blue ---- */
+  --lg-bg-base:        #071219;
+  --lg-surface:        rgba(180, 230, 255, 0.06);
+  --lg-surface-hover:  rgba(180, 230, 255, 0.11);
+  --lg-border:         rgba(200, 240, 255, 0.18);
+  --lg-border-accent:  rgba(165, 243, 252, 0.45);
+  --lg-accent:         #a5f3fc;
+  --lg-accent-glow:    rgba(165, 243, 252, 0.35);
+  --lg-text:           rgba(240, 250, 255, 0.92);
+  --lg-text-dim:       rgba(200, 230, 255, 0.45);
+  --lg-shimmer:        linear-gradient(105deg, transparent 40%, rgba(200,240,255,0.25) 50%, transparent 60%);
+}
+
+[data-theme="liquid-glass"] html,
+[data-theme="liquid-glass"] body {
+  background-color: var(--lg-bg-base);
+}
+
+/* Glass panel override */
+[data-theme="liquid-glass"] .glass-panel {
+  background: rgba(10, 30, 50, 0.55);
+  backdrop-filter: blur(40px) saturate(220%) brightness(1.08);
+  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.08);
+  border: 1px solid rgba(165, 243, 252, 0.18);
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(165, 243, 252, 0.06);
+  animation: glass-float 8s ease-in-out infinite;
+}
+
+[data-theme="liquid-glass"] .glass-panel-heavy {
+  background: rgba(8, 22, 38, 0.75);
+  backdrop-filter: blur(50px) saturate(240%);
+  -webkit-backdrop-filter: blur(50px) saturate(240%);
+  border: 1px solid rgba(165, 243, 252, 0.14);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 60px rgba(165, 243, 252, 0.05);
+}
+
+[data-theme="liquid-glass"] .glass-dock {
+  background: rgba(12, 30, 50, 0.70);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(165, 243, 252, 0.20);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 1px rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(165, 243, 252, 0.06);
+}
+
+/* Shimmer highlight on hover */
+[data-theme="liquid-glass"] .glass-panel::before,
+[data-theme="liquid-glass"] .glass-panel-heavy::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--lg-shimmer);
+  background-size: 200% auto;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+  animation: glass-shimmer 4s linear infinite;
+}
+
+[data-theme="liquid-glass"] .glass-panel:hover::before,
+[data-theme="liquid-glass"] .glass-panel-heavy:hover::before {
+  opacity: 1;
+}
+
+/* Scrollbar override */
+[data-theme="liquid-glass"] ::-webkit-scrollbar-track {
+  background: rgba(10, 25, 40, 0.8);
+}
+
+[data-theme="liquid-glass"] ::-webkit-scrollbar-thumb {
+  background: rgba(165, 243, 252, 0.2);
+  border-radius: 999px;
+}
+
+[data-theme="liquid-glass"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(165, 243, 252, 0.5);
+}
+
+/* Scrollbar subtle glow on thumb */
+[data-theme="liquid-glass"] ::-webkit-scrollbar-thumb:hover {
+  box-shadow: 0 0 8px rgba(165, 243, 252, 0.4);
+}
+
+/* Button / badge accent overrides */
+[data-theme="liquid-glass"] .btn-accent {
+  background: rgba(165, 243, 252, 0.12);
+  border-color: rgba(165, 243, 252, 0.35);
+  color: #a5f3fc;
+}
+
+[data-theme="liquid-glass"] .btn-accent:hover {
+  background: rgba(165, 243, 252, 0.22);
+  box-shadow: 0 0 20px rgba(165, 243, 252, 0.3);
+}
+
+/* Iridescent logo / heading color in liquid glass */
+[data-theme="liquid-glass"] .text-glow-blue {
+  text-shadow:
+    0 0 10px rgba(165, 243, 252, 0.8),
+    0 0 30px rgba(165, 243, 252, 0.4);
+  animation: iridescent-shift 6s ease-in-out infinite;
+}
+
+[data-theme="liquid-glass"] .text-glow-moss {
+  text-shadow:
+    0 0 10px rgba(165, 243, 252, 0.6),
+    0 0 20px rgba(165, 243, 252, 0.3);
+}
+

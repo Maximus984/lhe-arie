@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useInView } from 'framer-motion';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Stars, Float, Sphere, MeshDistortMaterial, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import IntroSequence3D from '../components/IntroSequence3D.jsx';
 import AIChatSystem from '../components/AIChatSystem.jsx';
-import { Disc, Zap, Cpu, Gamepad2, ArrowRight, Music, Star, Globe, Users, Award, ChevronDown } from 'lucide-react';
+import { Disc, Zap, Cpu, Gamepad2, ArrowRight, Music, Star, Globe, Users, Award, ChevronDown, Sparkles } from 'lucide-react';
 import LiveViewerCounter from '../components/LiveViewerCounter.jsx';
 
 // ---- Hero 3D background with neon brick ----

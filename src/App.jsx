@@ -88,7 +88,7 @@ export default function App() {
       const theme = localStorage.getItem('mfs_theme') || 'obsidian';
       document.documentElement.setAttribute('data-theme', theme);
       
-      let accent = '#10B981'; 
+      let accent = '#10B981';
       let bg = '#050508';
       if (theme === 'forge-red') {
         accent = '#EF4444';
@@ -99,6 +99,9 @@ export default function App() {
       } else if (theme === 'chrome') {
         accent = '#a0a0b0';
         bg = '#0a0a0d';
+      } else if (theme === 'liquid-glass') {
+        accent = '#a5f3fc';
+        bg = '#0d1a2a';
       }
       document.documentElement.style.setProperty('--color-moss-green', accent);
       document.documentElement.style.setProperty('--color-cyber-blue', accent); 

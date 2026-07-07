@@ -7,10 +7,11 @@ import toast from 'react-hot-toast';
 import StorageManager from './StorageManager.jsx';
 
 const THEMES = [
-  { id: 'obsidian', label: 'Obsidian', color: '#10B981', bg: '#050508', desc: 'Dark void with emerald accents' },
-  { id: 'forge-red', label: 'Forge Red', color: '#EF4444', bg: '#0a0505', desc: 'Deep red — heat & intensity' },
-  { id: 'deep-navy', label: 'Deep Navy', color: '#6366F1', bg: '#04040f', desc: 'Indigo dark — cosmic and calm' },
-  { id: 'chrome', label: 'Chrome', color: '#a0a0b0', bg: '#0a0a0d', desc: 'Silver & steel — minimal luxury' },
+  { id: 'obsidian',      label: 'Obsidian',      color: '#10B981', bg: '#050508',                          desc: 'Dark void with emerald accents' },
+  { id: 'forge-red',    label: 'Forge Red',     color: '#EF4444', bg: '#0a0505',                          desc: 'Deep red — heat & intensity' },
+  { id: 'deep-navy',   label: 'Deep Navy',     color: '#6366F1', bg: '#04040f',                          desc: 'Indigo dark — cosmic and calm' },
+  { id: 'chrome',       label: 'Chrome',        color: '#a0a0b0', bg: '#0a0a0d',                          desc: 'Silver & steel — minimal luxury' },
+  { id: 'liquid-glass', label: '✦ Liquid Glass', color: '#a5f3fc', bg: 'rgba(180,220,255,0.08)',          desc: 'Frosted translucent iOS-style glass' },
 ];
 
 export default function SettingsPanel({ onClose }) {
