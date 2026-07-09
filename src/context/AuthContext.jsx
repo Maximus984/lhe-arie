@@ -103,8 +103,15 @@ export function AuthProvider({ children }) {
         const users = getUsers();
         const freshUser = users.find(u => u.id === session.userId);
         if (freshUser) {
-          setCurrentUser(freshUser);
-          markUserOnline(freshUser.id);
+          if (freshUser.isBanned) {
+            localStorage.removeItem('mfs_session');
+            setCurrentUser(null);
+          } else {
+            setCurrentUser(freshUser);
+            markUserOnline(freshUser.id);
+          }
+        } else {
+          localStorage.removeItem('mfs_session');
         }
       } else {
         localStorage.removeItem('mfs_session');
@@ -177,6 +184,10 @@ export function AuthProvider({ children }) {
       addSessionLog({ action: 'FAILED_LOGIN', email, reason: 'Invalid credentials' });
       const remaining = MAX_ATTEMPTS - newAttempts[emailKey];
       return { success: false, error: `Invalid credentials. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` };
+    }
+
+    if (user.isBanned) {
+      return { success: false, error: 'This account has been banned by an administrator.' };
     }
 
     // Clear failed attempts on success

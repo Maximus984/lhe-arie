@@ -39,5 +39,38 @@ export function setLiveMode(active, options = {}) {
   };
   if (!active) updated.startedAt = null;
   localStorage.setItem(LIVE_MODE_KEY, JSON.stringify(updated));
+
+  // Sync to OBS live stream config
+  try {
+    const rawStream = localStorage.getItem('mfs_live_stream_config');
+    const streamCfg = rawStream ? JSON.parse(rawStream) : {
+      active: false,
+      type: 'preset',
+      url: '',
+      filter: 'none',
+      showGoal: true,
+      goalTitle: 'Sub Goal',
+      goalTarget: 100,
+      goalCurrent: 76,
+      viewerCount: 142
+    };
+
+    streamCfg.active = active;
+    if (options.streamUrl !== undefined) {
+      streamCfg.url = options.streamUrl;
+    }
+    if (options.streamType !== undefined) {
+      streamCfg.type = options.streamType;
+    } else if (options.streamUrl) {
+      // Auto detect type if URL is set
+      if (options.streamUrl.includes('.mp4') || options.streamUrl.startsWith('data:video/')) {
+        streamCfg.type = 'custom-video';
+      } else {
+        streamCfg.type = 'youtube';
+      }
+    }
+    localStorage.setItem('mfs_live_stream_config', JSON.stringify(streamCfg));
+  } catch (e) {}
+
   return updated;
 }

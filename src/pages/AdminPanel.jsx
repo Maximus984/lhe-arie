@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { motion } from 'framer-motion';
-import { Shield, Users, Server, FileText, ArrowLeft, RefreshCw, Trash2, Check, Clock, UserPlus, Key, Radio, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Server, FileText, ArrowLeft, RefreshCw, Trash2, Check, Clock, UserPlus, Key, Radio, AlertTriangle, Send } from 'lucide-react';
 import { runSystemDiagnostics } from '../data/security.js';
 import { isMaintenanceMode, setMaintenanceMode, getMaintenanceMessage, setMaintenanceMessage } from '../data/analytics.js';
+import { publish } from '../data/realtime.js';
 import toast from 'react-hot-toast';
 
 const ALL_SYSTEM_PERMISSIONS = [
@@ -57,6 +58,10 @@ export default function AdminPanel() {
   // Diagnostics States
   const [lastReport, setLastReport] = useState(null);
 
+  // Announcement States
+  const [announcements, setAnnouncements] = useState([]);
+  const [newAnn, setNewAnn] = useState('');
+
   const refreshUsers = () => {
     setUsers(JSON.parse(localStorage.getItem('mfs_users') || '[]'));
   };
@@ -65,9 +70,34 @@ export default function AdminPanel() {
     setCustomRoles(JSON.parse(localStorage.getItem('mfs_custom_roles') || '{}'));
   };
 
+  const refreshAnnouncements = () => {
+    try {
+      const raw = localStorage.getItem('mfs_announcements');
+      if (raw) {
+        setAnnouncements(JSON.parse(raw));
+      } else {
+        setAnnouncements([
+          {
+            id: 'ann_1',
+            author: 'Maxx — Founder',
+            role: 'founder',
+            text: 'Welcome to the Liquid Glass Ecosystem! Staff can post real-time updates and notes here.',
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }
+    } catch (_) {}
+  };
+
   useEffect(() => {
     refreshUsers();
     refreshRoles();
+    refreshAnnouncements();
+
+    const unsub = subscribe(['announcement_added', 'announcement_deleted'], () => {
+      refreshAnnouncements();
+    });
+    return () => unsub();
   }, []);
 
   const handleUpdateStatus = (id, newStatus) => {
@@ -125,16 +155,52 @@ export default function AdminPanel() {
     toast.success(`Registered ${newStaffRole} account successfully!`);
   };
 
-  // Ban/Delete user
+  // Ban/Unban user (Block/Lockout toggle)
   const handleBanUser = (userId, name) => {
     if (userId === 'usr_founder_001') {
       return toast.error('Cannot ban founder account Maximus.');
     }
     const currentUsers = JSON.parse(localStorage.getItem('mfs_users') || '[]');
-    const filtered = currentUsers.filter(u => u.id !== userId);
-    localStorage.setItem('mfs_users', JSON.stringify(filtered));
+    const updated = currentUsers.map(u => {
+      if (u.id === userId) {
+        const nextBanned = !u.isBanned;
+        return { ...u, isBanned: nextBanned };
+      }
+      return u;
+    });
+    localStorage.setItem('mfs_users', JSON.stringify(updated));
     refreshUsers();
-    toast.success(`Removed and Banned account: ${name}`);
+    
+    const userObj = updated.find(u => u.id === userId);
+    toast.success(`${userObj.isBanned ? 'Banned/Blocked' : 'Unbanned'} user: ${name}`);
+  };
+
+  const handlePostAnnouncement = (e) => {
+    e.preventDefault();
+    if (!newAnn.trim()) return;
+
+    const newAnnouncement = {
+      id: `ann_${Date.now()}`,
+      author: 'Maxx — Founder',
+      role: 'founder',
+      text: newAnn.trim(),
+      timestamp: new Date().toISOString()
+    };
+
+    const updated = [newAnnouncement, ...announcements];
+    setAnnouncements(updated);
+    localStorage.setItem('mfs_announcements', JSON.stringify(updated));
+    publish('announcement_added', newAnnouncement);
+    setNewAnn('');
+    toast.success('Founder announcement broadcasted!');
+  };
+
+  const handleDeleteAnnouncement = (id) => {
+    const updated = announcements.filter(a => a.id !== id);
+    setAnnouncements(updated);
+    localStorage.setItem('mfs_announcements', JSON.stringify(updated));
+    publish('announcement_deleted', { id });
+    toast.success('Announcement deleted');
   };
 
   // Create / Update Role (Discord-style)
@@ -279,6 +345,7 @@ export default function AdminPanel() {
             { id: 'roles', label: 'Roles & Permissions', icon: <Key size={14} /> },
             { id: 'logs', label: 'Session IP Logs', icon: <Shield size={14} /> },
             { id: 'forms', label: 'Form Inboxes', icon: <FileText size={14} /> },
+            { id: 'announcements', label: 'Announcements', icon: <Radio size={14} /> },
           ].map(tab => (
             <button
               key={tab.id}
@@ -526,6 +593,11 @@ export default function AdminPanel() {
                               {u.avatar}
                             </div>
                             {u.name}
+                            {u.isBanned && (
+                              <span className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/25 text-red-400 text-[8px] font-mono font-bold uppercase tracking-wider">
+                                Banned
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 text-white/40">{u.email}</td>
                           <td className="py-3">
@@ -551,10 +623,14 @@ export default function AdminPanel() {
                             <button
                               onClick={() => handleBanUser(u.id, u.name)}
                               disabled={u.role === 'founder'}
-                              className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Ban / Remove User"
+                              className={`p-1.5 rounded transition disabled:opacity-30 disabled:cursor-not-allowed ${
+                                u.isBanned
+                                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/25'
+                                  : 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/25'
+                              }`}
+                              title={u.isBanned ? "Unban / Unblock User" : "Ban / Block User"}
                             >
-                              <Trash2 size={12} />
+                              {u.isBanned ? <Check size={12} /> : <Trash2 size={12} />}
                             </button>
                           </td>
                         </tr>
@@ -806,6 +882,78 @@ export default function AdminPanel() {
                   })}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Announcements */}
+        {activeTab === 'announcements' && (
+          <div className="bg-white/3 border border-white/5 rounded-2xl p-6 flex flex-col gap-5 text-left font-mono">
+            <div>
+              <h3 className="text-sm font-display font-bold uppercase tracking-wider flex items-center gap-2">
+                <Radio size={14} className="text-indigo-400" />
+                Ecosystem Announcements Bulletin
+              </h3>
+              <p className="text-xs text-white/40 mt-1">Directly post and manage site-wide announcements broadcasted to all logged-in users.</p>
+            </div>
+
+            <form onSubmit={handlePostAnnouncement} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-mono text-white/40 uppercase">Broadcast Message</label>
+                <textarea
+                  value={newAnn}
+                  onChange={e => setNewAnn(e.target.value)}
+                  placeholder="Type a new global update or system note..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white placeholder-white/20 focus:outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!newAnn.trim()}
+                className="py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition"
+              >
+                <Send size={12} />
+                BROADCAST TO ECOSYSTEM
+              </button>
+            </form>
+
+            <div className="flex flex-col gap-3 mt-2 border-t border-white/5 pt-4">
+              <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Active Bulletins ({announcements.length})</span>
+              
+              {announcements.length === 0 ? (
+                <p className="text-center text-xs font-mono text-white/20 py-6">No active announcements.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {announcements.map((ann) => (
+                    <div key={ann.id} className="p-4 rounded-xl border border-white/5 bg-white/3 flex items-center justify-between gap-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase font-bold border ${
+                            ann.role === 'founder' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                            ann.role === 'staff' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {ann.role}
+                          </span>
+                          <span className="font-bold text-white/70 text-xs">{ann.author}</span>
+                          <span className="text-[9px] text-white/30">
+                            {new Date(ann.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 font-light mt-1">{ann.text}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                        className="p-2 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 text-white/40 hover:text-red-400 rounded-lg transition"
+                        title="Delete announcement"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

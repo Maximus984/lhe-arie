@@ -130,7 +130,37 @@ export default function StaffPortal() {
       viewerCount: updates.viewerCount !== undefined ? updates.viewerCount : viewerCount,
     };
     localStorage.setItem('mfs_live_stream_config', JSON.stringify(config));
+    
+    // Sync with mfs_live_mode key
+    try {
+      const rawLive = localStorage.getItem('mfs_live_mode');
+      const liveCfg = rawLive ? JSON.parse(rawLive) : {
+        active: false,
+        streamUrl: '',
+        streamType: 'preset',
+        title: 'WE ARE LIVE',
+        subtitle: 'Maxx Forge Studio is streaming now. Click to watch.',
+        startedAt: null,
+        activatedBy: null,
+      };
+
+      liveCfg.active = config.active;
+      liveCfg.streamUrl = config.url;
+      liveCfg.streamType = config.type;
+      if (config.active && !liveCfg.startedAt) {
+        liveCfg.startedAt = new Date().toISOString();
+      } else if (!config.active) {
+        liveCfg.startedAt = null;
+      }
+      localStorage.setItem('mfs_live_mode', JSON.stringify(liveCfg));
+      
+      // Update local state if needed
+      setLiveStreamUrl(config.url);
+      setLiveModeConfig(liveCfg);
+    } catch (e) {}
+
     publish('live_config_changed', {});
+    publish('live_mode_changed', { active: config.active });
     
     if (updates.active === true) {
       toast.success('Broadcast stream is now LIVE!');
@@ -144,11 +174,17 @@ export default function StaffPortal() {
     let finalType = streamType;
 
     const ytMatch = finalUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+    const isYtId = /^[a-zA-Z0-9_-]{11}$/.test(finalUrl);
+
     if (ytMatch) {
       finalUrl = ytMatch[1];
       finalType = 'youtube';
       setStreamType('youtube');
       toast.success('YouTube Video ID extracted successfully!');
+    } else if (isYtId) {
+      finalType = 'youtube';
+      setStreamType('youtube');
+      toast.success('YouTube Video ID detected!');
     } else if (finalUrl.includes('.mp4') || finalUrl.startsWith('data:video/')) {
       finalType = 'custom-video';
       setStreamType('custom-video');
@@ -185,7 +221,9 @@ export default function StaffPortal() {
       subtitle: liveSubtitle,
     });
     setLiveModeConfig(cfg);
+    setStreamActive(on);
     publish('live_mode_changed', { active: on });
+    publish('live_config_changed', {});
     if (on) {
       toast.success('🔴 LIVE MODE ACTIVATED — Dashboard banner is live!');
     } else {

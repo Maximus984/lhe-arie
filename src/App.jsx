@@ -18,6 +18,7 @@ import ForgeChest from './components/ForgeChest.jsx';
 import SocialsDock from './components/SocialsDock.jsx';
 import SparkleCursor from './components/SparkleCursor.jsx';
 import { isMaintenanceMode, getMaintenanceMessage } from './data/analytics.js';
+import { subscribe } from './data/realtime.js';
 import EcosystemErrorBoundary from './components/EcosystemErrorBoundary.jsx';
 import PageTransitionLoader from './components/PageTransitionLoader.jsx';
 import { AnimatePresence } from 'framer-motion';
@@ -37,13 +38,21 @@ function ProtectedRoute({ children, requiredPermission }) {
 // Maintenance gate — allows founder/staff to bypass
 function MaintenanceGate({ children }) {
   const { currentUser, can } = useAuth();
-  const [maintenance, setMaintenance] = useState(false);
+  const [maintenance, setMaintenance] = useState(isMaintenanceMode());
 
   useEffect(() => {
     const check = () => setMaintenance(isMaintenanceMode());
     check();
+    
+    const unsub = subscribe('maintenance_mode_changed', (event, data) => {
+      setMaintenance(data.enabled);
+    });
+
     const interval = setInterval(check, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unsub();
+    };
   }, []);
 
   // Founder and staff bypass maintenance mode
