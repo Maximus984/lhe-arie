@@ -18,7 +18,8 @@ export const SCHEDULED_RELEASES = [
       'Implement one-time recovery key generator for staff to assist members with locked accounts',
       'Add daily check-in checklist panel with streak tracking and shift diagnostic report submission',
       'Implement floating Staff Access bypass button on Maintenance mode page',
-      'Add collapsible help banner with live status tickers and self-help guide on Login page'
+      'Add collapsible help banner with live status tickers and self-help guide on Login page',
+      'Deploy custom sci-fi metallic neon cursor with default browser cursor override and synchronized particle trails'
     ]
   },
   {
