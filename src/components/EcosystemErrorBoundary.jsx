@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, RefreshCw, Send, Check, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send, Check, ShieldAlert, ChevronDown, ChevronUp, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -103,6 +103,12 @@ class ErrorBoundaryInner extends React.Component {
     }
   };
 
+  handleDismiss = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
+    // Go home to clear the route crash loop
+    window.location.href = '/';
+  };
+
   render() {
     if (this.state.hasError) {
       const { error, reported, reporting, showDetails } = this.state;
@@ -201,6 +207,9 @@ class ErrorBoundaryInner extends React.Component {
               <button onClick={this.handleRepair} style={styles.repairBtn}>
                 <RefreshCw size={13} /> REPAIR & RELOAD WEBSITE
               </button>
+              <button onClick={this.handleDismiss} style={styles.dismissBtn}>
+                <X size={13} /> DISMISS & RETURN HOME
+              </button>
             </div>
             <p style={styles.infoText}>
               Wiping transient configuration caches. Main credentials and session enclaves will be preserved.
@@ -296,6 +305,14 @@ const styles = {
     border: '1px solid rgba(16,185,129,0.3)',
     color: '#fff', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold',
     cursor: 'pointer', boxShadow: '0 2px 12px rgba(16,185,129,0.2)', transition: 'all 0.2s'
+  },
+  dismissBtn: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+    width: '100%', padding: '12px', borderRadius: '10px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold',
+    cursor: 'pointer', transition: 'all 0.2s'
   },
   infoText: { fontSize: '9px', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic', margin: 0, textAlign: 'center' }
 };
