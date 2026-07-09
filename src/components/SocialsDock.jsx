@@ -133,8 +133,7 @@ const styles = {
   container: {
     position: 'fixed',
     bottom: '18px',
-    left: '50%',
-    transform: 'translateX(-50%)',
+    right: '18px',
     zIndex: 9000,
     pointerEvents: 'none',
   },

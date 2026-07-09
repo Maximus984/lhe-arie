@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../context/AuthContext.jsx';
-import { Eye, EyeOff, Lock, User, AlertCircle, UserPlus, Globe, Sparkles, Fingerprint, CheckCircle2 } from 'lucide-react';
+import { useAuth, generateRecoveryKey } from '../context/AuthContext.jsx';
+import { Eye, EyeOff, Lock, User, AlertCircle, UserPlus, Globe, Sparkles, Fingerprint, CheckCircle2, ArrowLeft, Download, Copy, FileText, RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import LottiePlayer from '../components/LottiePlayer.jsx';
 
@@ -139,12 +139,85 @@ export function GuestBanner({ onRegister }) {
   );
 }
 
+// ---- Login Help Banner ----
+function LoginHelpBanner() {
+  const [open, setOpen] = useState(false);
+  const [tickerPos, setTickerPos] = useState(0);
+  const tickerText = 'Having trouble signing in? Use your recovery key on the FORGOT PASSWORD tab · Need help? Contact our staff team ·';
+
+  useEffect(() => {
+    if (open) return;
+    const interval = setInterval(() => {
+      setTickerPos(prev => (prev <= -100 ? 0 : prev - 0.4));
+    }, 16);
+    return () => clearInterval(interval);
+  }, [open]);
+
+  return (
+    <div style={{ marginTop: '12px', borderRadius: '10px', border: '1px solid rgba(99,102,241,0.2)', background: 'rgba(99,102,241,0.04)', overflow: 'hidden' }}>
+      {/* Ticker row */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+      >
+        <span style={{ fontSize: '9px', color: 'rgba(99,102,241,0.9)', fontWeight: '800', letterSpacing: '0.14em', fontFamily: 'monospace', flexShrink: 0 }}>❓ HELP</span>
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', height: '14px' }}>
+          {!open && (
+            <div style={{ position: 'absolute', whiteSpace: 'nowrap', fontSize: '9px', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', letterSpacing: '0.06em', transform: `translateX(${tickerPos}%)`, transition: 'none', lineHeight: '14px' }}>
+              {tickerText}{tickerText}
+            </div>
+          )}
+          {open && <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>Sign-in Support Guide</span>}
+        </div>
+        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {/* Expanded help content */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ padding: '0 12px 12px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {[
+                { icon: '🔑', title: 'Lost your password?', body: 'Click "Forgot Password?" above and enter your email + your recovery key that was given to you when you registered.' },
+                { icon: '🔒', title: 'Account locked?', body: 'After 5 failed attempts your account auto-locks. Contact a staff member to unlock it for you.' },
+                { icon: '📧', title: 'Changed your email?', body: 'If your login email changed, reach out to staff. Staff can update it for you from the Staff Portal.' },
+                { icon: '🆕', title: 'New here?', body: 'Switch to the REGISTER tab to create a free account and join the Maxx Forge Studio ecosystem.' },
+              ].map(tip => (
+                <div key={tip.title} style={{ display: 'flex', gap: '8px', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: '14px', flexShrink: 0, lineHeight: 1.4 }}>{tip.icon}</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.7)', letterSpacing: '0.05em' }}>{tip.title}</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>{tip.body}</p>
+                  </div>
+                </div>
+              ))}
+              <a
+                href="mailto:support@maxxforgestudio.com"
+                style={{ display: 'block', textAlign: 'center', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: 'rgba(165,180,252,0.9)', fontSize: '10px', fontWeight: '700', letterSpacing: '0.12em', fontFamily: 'monospace', textDecoration: 'none' }}
+              >
+                ✉ CONTACT STAFF SUPPORT
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ---- Main Login Component ----
 export default function Login() {
-  const { login, registerMember, guestLogin } = useAuth();
+  const { login, registerMember, guestLogin, recoverAccount } = useAuth();
   const navigate = useNavigate();
   const [showSplash, setShowSplash] = useState(true);
-  const [tab, setTab] = useState('login'); // 'login' | 'register'
+  const [tab, setTab] = useState('login'); // 'login' | 'register' | 'recover'
 
   // Login state
   const [email, setEmail] = useState('');
@@ -162,32 +235,91 @@ export default function Login() {
   const [showRegPass, setShowRegPass] = useState(false);
   const [loadingReg, setLoadingReg] = useState(false);
   const [regError, setRegError] = useState('');
-  const [regStep, setRegStep] = useState(1); // 1 = form, 2 = avatar picker
+  const [regStep, setRegStep] = useState(1); // 1 = form, 2 = avatar picker, 3 = recovery key generation
+
+  // Account recovery key states
+  const [generatedRecoveryKey, setGeneratedRecoveryKey] = useState('');
+  const [recoveryDownloaded, setRecoveryDownloaded] = useState(false);
+
+  // Recovery input states
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverKey, setRecoverKey] = useState('');
+  const [recoverNewPass, setRecoverNewPass] = useState('');
+  const [recoverNewPassConf, setRecoverNewPassConf] = useState('');
+  const [loadingRecover, setLoadingRecover] = useState(false);
+  const [recoverError, setRecoverError] = useState('');
 
   // Biometric States
   const [biometricScan, setBiometricScan] = useState(false);
   const [biometricStatus, setBiometricStatus] = useState('READY'); // READY | SELECTING | SCANNING | SUCCESS
   const [selectedBiometricUser, setSelectedBiometricUser] = useState(null);
 
+  // Passkey Prompt States
+  const [passkeyPromptUser, setPasskeyPromptUser] = useState(null);
+  const [passkeySetupScanning, setPasskeySetupScanning] = useState(false);
+  const [passkeySetupSuccess, setPasskeySetupSuccess] = useState(false);
+
+  const getBiometricProfiles = () => {
+    const list = [
+      { id: 'founder', name: 'Founder Profile', details: 'Face ID · maximus@maxxforgestudio.com', email: 'maximus@maxxforgestudio.com' },
+      { id: 'staff', name: 'Staff Profile', details: 'Fingerprint · em@maxxforgestudio.com', email: 'em@maxxforgestudio.com' },
+      { id: 'member', name: 'Member Profile', details: 'Touch ID · member@maxxforge.com', email: 'member@maxxforge.com' }
+    ];
+
+    try {
+      const passkeyEmail = localStorage.getItem('mfs_passkey_enabled_user');
+      if (passkeyEmail) {
+        const users = JSON.parse(localStorage.getItem('mfs_users') || '[]');
+        const u = users.find(user => user.email.toLowerCase() === passkeyEmail.toLowerCase());
+        if (u && !list.some(item => item.email.toLowerCase() === u.email.toLowerCase())) {
+          list.push({
+            id: u.role,
+            name: `${u.name} (Device Passkey)`,
+            details: `Secure Biometric · ${u.email}`,
+            email: u.email
+          });
+        }
+      }
+    } catch (_) {}
+
+    return list;
+  };
+
   const handleBiometricClick = () => {
     setBiometricScan(true);
     setBiometricStatus('SELECTING');
   };
 
-  const triggerBiometricScan = async (userType) => {
-    setSelectedBiometricUser(userType);
+  const triggerBiometricScan = async (profile) => {
+    setSelectedBiometricUser(profile.name);
     setBiometricStatus('SCANNING');
     
     await new Promise(resolve => setTimeout(resolve, 1800));
     
-    let result;
-    if (userType === 'founder') {
-      result = await login('founder@maxxforge.com', 'founder2026');
-    } else if (userType === 'staff') {
-      result = await login('staff@maxxforge.com', 'staff2026');
-    } else {
-      result = await login('member@maxxforge.com', 'member2026');
+    let email = profile.email;
+    let password = '';
+    try {
+      const users = JSON.parse(localStorage.getItem('mfs_users') || '[]');
+      const targetUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (targetUser) {
+        password = targetUser.password;
+      }
+    } catch (_) {}
+
+    if (!email) {
+      if (profile.id === 'founder') {
+        email = 'maximus@maxxforgestudio.com';
+        password = 'ForgeFounder2026!';
+      } else if (profile.id === 'staff') {
+        email = 'em@maxxforgestudio.com';
+        password = 'StaffForge2026!';
+      } else {
+        email = 'member@maxxforge.com';
+        password = 'member2026';
+      }
     }
+
+    const result = await login(email, password);
 
     if (result.success) {
       setBiometricStatus('SUCCESS');
@@ -201,6 +333,45 @@ export default function Login() {
     }
   };
 
+  const checkAndPromptPasskey = (user) => {
+    try {
+      const enabledUser = localStorage.getItem('mfs_passkey_enabled_user');
+      if (enabledUser?.toLowerCase() === user.email.toLowerCase()) {
+        navigate('/dashboard');
+      } else {
+        setPasskeyPromptUser(user);
+      }
+    } catch (_) {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleEnablePasskey = async () => {
+    if (!passkeyPromptUser) return;
+    setPasskeySetupScanning(true);
+    
+    // Simulate biometric scan for setup
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    setPasskeySetupSuccess(true);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    try {
+      localStorage.setItem('mfs_passkey_enabled_user', passkeyPromptUser.email);
+      toast.success(`Secure biometric passkey registered for ${passkeyPromptUser.name}!`);
+    } catch (_) {}
+    
+    setPasskeyPromptUser(null);
+    setPasskeySetupScanning(false);
+    setPasskeySetupSuccess(false);
+    navigate('/dashboard');
+  };
+
+  const handleSkipPasskey = () => {
+    setPasskeyPromptUser(null);
+    navigate('/dashboard');
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) { setLoginError('Please fill in all fields.'); return; }
@@ -209,7 +380,7 @@ export default function Login() {
     setLoadingLogin(false);
     if (result.success) {
       toast.success(`Welcome back, ${result.user.name}!`);
-      navigate('/dashboard');
+      checkAndPromptPasskey(result.user);
     } else {
       setLoginError(result.error);
     }
@@ -225,17 +396,94 @@ export default function Login() {
       setRegStep(2);
       return;
     }
-    // Step 2: finalize
+    if (regStep === 2) {
+      setRegError('');
+      const key = generateRecoveryKey();
+      setGeneratedRecoveryKey(key);
+      setRecoveryDownloaded(false);
+      setRegStep(3);
+      return;
+    }
+    // Step 3: finalize
+    if (!recoveryDownloaded) {
+      setRegError('You must download the recovery key to your device first.');
+      return;
+    }
     setLoadingReg(true); setRegError('');
-    const result = await registerMember(regName, regEmail, regPassword, regAvatar);
+    const result = await registerMember(regName, regEmail, regPassword, regAvatar, generatedRecoveryKey);
     setLoadingReg(false);
     if (result.success) {
       toast.success(`🎉 Welcome to the Forge, ${result.user.name}!`);
-      navigate('/dashboard');
+      checkAndPromptPasskey(result.user);
     } else {
       setRegError(result.error);
       setRegStep(1);
     }
+  };
+
+
+  const handleRecover = async (e) => {
+    e.preventDefault();
+    if (!recoverEmail || !recoverKey || !recoverNewPass || !recoverNewPassConf) {
+      setRecoverError('Please fill in all fields.');
+      return;
+    }
+    if (recoverNewPass !== recoverNewPassConf) {
+      setRecoverError('Passwords do not match.');
+      return;
+    }
+    if (recoverNewPass.length < 6) {
+      setRecoverError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setLoadingRecover(true); setRecoverError('');
+    const result = await recoverAccount(recoverEmail, recoverKey, recoverNewPass);
+    setLoadingRecover(false);
+    
+    if (result.success) {
+      toast.success('Passcode successfully reset! You can now log in.');
+      setTab('login');
+      setEmail(recoverEmail);
+      setPassword('');
+      setRecoverEmail('');
+      setRecoverKey('');
+      setRecoverNewPass('');
+      setRecoverNewPassConf('');
+    } else {
+      setRecoverError(result.error);
+    }
+  };
+
+  const downloadRecoveryKey = () => {
+    const element = document.createElement("a");
+    const file = new Blob([
+      `=====================================================\n`,
+      `MAXX FORGE STUDIO™ — ACCOUNT RECOVERY KEY\n`,
+      `=====================================================\n`,
+      `Email: ${regEmail}\n`,
+      `Display Name: ${regName}\n`,
+      `Date Generated: ${new Date().toLocaleDateString()}\n\n`,
+      `Your 12-word mnemonic recovery phrase:\n`,
+      `-----------------------------------------------------\n`,
+      `${generatedRecoveryKey}\n`,
+      `-----------------------------------------------------\n\n`,
+      `WARNING: Keep this key safe. Do not share it with anyone.\n`,
+      `You can use this key to reset your passcode at login.\n`,
+      `=====================================================\n`
+    ], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `maxx-forge-recovery-key-${regName.toLowerCase().replace(/\s+/g, '-')}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    setRecoveryDownloaded(true);
+    toast.success('Recovery key downloaded to device! Saved to wallet/disk.');
+  };
+
+  const copyRecoveryKey = () => {
+    navigator.clipboard.writeText(generatedRecoveryKey);
+    toast.success('Recovery phrase copied to clipboard!');
   };
 
   const handleGuest = () => {
@@ -257,12 +505,13 @@ export default function Login() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6 }}
+            className="login-layout"
             style={styles.layout}
           >
             <div style={styles.marbleOverlay} />
 
             {/* Left: Logo panel */}
-            <div style={styles.leftPanel}>
+            <div className="login-left-panel" style={styles.leftPanel}>
               <motion.div
                 initial={{ opacity: 0, scale: 0.85 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -282,10 +531,11 @@ export default function Login() {
               initial={{ opacity: 0, x: 40 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.7, ease: 'easeOut', delay: 0.15 }}
+              className="login-right-panel"
               style={styles.rightPanel}
             >
               {/* Brand title */}
-              <div style={styles.brandBlock}>
+              <div className="login-brand-block" style={styles.brandBlock}>
                 <h1 style={styles.brandTitle}>MAXX FORGE<br />STUDIO</h1>
                 <div style={styles.brandDivider}>
                   <div style={styles.dividerLine} />
@@ -299,7 +549,7 @@ export default function Login() {
                 <button
                   id="tab-login"
                   onClick={() => { setTab('login'); setLoginError(''); }}
-                  style={{ ...styles.tab, ...(tab === 'login' ? styles.tabActive : {}) }}
+                  style={{ ...styles.tab, ...((tab === 'login' || tab === 'recover') ? styles.tabActive : {}) }}
                 >
                   <Lock size={12} /> Login
                 </button>
@@ -313,7 +563,7 @@ export default function Login() {
               </div>
 
               {/* Card */}
-              <div style={styles.card}>
+              <div className="login-card" style={styles.card}>
                 <AnimatePresence mode="wait">
 
                   {/* ── LOGIN FORM ── */}
@@ -389,13 +639,16 @@ export default function Login() {
                       </motion.button>
 
                       <button id="forgot-password-btn"
-                        onClick={() => toast('Contact an admin to reset your password.', { icon: '🔑' })}
+                        onClick={() => { setTab('recover'); setRecoverError(''); }}
                         style={styles.forgotBtn}
                         onMouseEnter={e => { e.target.style.borderColor = 'rgba(255,255,255,0.2)'; e.target.style.color = 'rgba(255,255,255,0.6)'; }}
                         onMouseLeave={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.color = 'rgba(255,255,255,0.4)'; }}
                       >
                         FORGOT PASSWORD?
                       </button>
+
+                      {/* ── Help Banner ── */}
+                      <LoginHelpBanner />
                     </motion.div>
                   )}
 
@@ -403,11 +656,15 @@ export default function Login() {
                   {tab === 'register' && (
                     <motion.div key="register-form" initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -15 }} transition={{ duration: 0.3 }}>
                       <div style={styles.cardHeader}>
-                        <h2 style={styles.welcomeTitle}>{regStep === 1 ? 'JOIN THE FORGE' : 'CHOOSE YOUR AVATAR'}</h2>
-                        <p style={styles.welcomeSub}>{regStep === 1 ? 'Create your free account' : 'Pick an emoji to represent you'}</p>
+                        <h2 style={styles.welcomeTitle}>
+                          {regStep === 1 ? 'JOIN THE FORGE' : regStep === 2 ? 'CHOOSE YOUR AVATAR' : 'SECURE YOUR ACCOUNT'}
+                        </h2>
+                        <p style={styles.welcomeSub}>
+                          {regStep === 1 ? 'Create your free account' : regStep === 2 ? 'Pick an emoji to represent you' : 'Save your recovery key'}
+                        </p>
                         {/* Step indicator */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '8px' }}>
-                          {[1, 2].map(s => (
+                          {[1, 2, 3].map(s => (
                             <div key={s} style={{ width: s === regStep ? '18px' : '6px', height: '6px', borderRadius: '3px', background: s === regStep ? 'rgba(180,160,100,0.8)' : 'rgba(255,255,255,0.15)', transition: 'all 0.3s' }} />
                           ))}
                         </div>
@@ -423,7 +680,7 @@ export default function Login() {
                       </AnimatePresence>
 
                       <AnimatePresence mode="wait">
-                        {regStep === 1 ? (
+                        {regStep === 1 && (
                           <motion.form key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onSubmit={handleRegister} style={styles.form}>
                             <div style={styles.inputWrapper}>
                               <User size={15} color="#888" style={styles.inputIcon} />
@@ -462,9 +719,10 @@ export default function Login() {
                               </span>
                             </motion.button>
                           </motion.form>
-                        ) : (
+                        )}
+
+                        {regStep === 2 && (
                           <motion.form key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleRegister} style={{ ...styles.form, gap: '16px' }}>
-                            {/* Preview */}
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                               <motion.div
                                 animate={{ scale: [1, 1.08, 1] }}
@@ -484,17 +742,102 @@ export default function Login() {
                                 onClick={() => setRegStep(1)}
                                 style={{ flex: 1, padding: '12px', borderRadius: '8px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontFamily: 'monospace', fontWeight: '700', letterSpacing: '0.15em', textTransform: 'uppercase', cursor: 'pointer' }}
                               >
-                                ← BACK
+                                BACK
+                              </button>
+                              <motion.button
+                                id="reg-step2-next"
+                                type="submit"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                style={{ ...styles.loginBtn, flex: 2 }}
+                              >
+                                <span style={styles.loginBtnText}>NEXT: RECOVERY KEY 🔑</span>
+                              </motion.button>
+                            </div>
+                          </motion.form>
+                        )}
+
+                        {regStep === 3 && (
+                          <motion.form key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleRegister} style={{ ...styles.form, gap: '12px' }}>
+                            <div style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px', textAlign: 'left' }}>
+                              <span style={{ fontSize: '10px', color: '#f87171', fontFamily: 'monospace', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <AlertCircle size={12} /> Secure Backup Required
+                              </span>
+                              <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', margin: '3px 0 0 0', lineHeight: '1.3' }}>
+                                You must download or copy your recovery key to progress. Keep it safe to restore passcode access.
+                              </p>
+                            </div>
+
+                            {/* Mnemonic Display Grid */}
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(3, 1fr)',
+                              gap: '6px',
+                              background: 'rgba(0,0,0,0.3)',
+                              padding: '10px',
+                              borderRadius: '10px',
+                              border: '1px solid rgba(255,255,255,0.06)'
+                            }}>
+                              {generatedRecoveryKey.split(' ').map((word, idx) => (
+                                <div key={idx} style={{
+                                  padding: '5px 3px',
+                                  background: 'rgba(255,255,255,0.02)',
+                                  border: '1px solid rgba(255,255,255,0.04)',
+                                  borderRadius: '5px',
+                                  fontSize: '10px',
+                                  fontFamily: 'monospace',
+                                  color: '#e0e0e0',
+                                  textAlign: 'center',
+                                  position: 'relative'
+                                }}>
+                                  <span style={{ fontSize: '7px', color: 'rgba(255,255,255,0.2)', position: 'absolute', top: '0.5px', left: '2px' }}>{idx + 1}</span>
+                                  {word}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Recovery Actions */}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                type="button"
+                                onClick={copyRecoveryKey}
+                                style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontFamily: 'monospace', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                              >
+                                <Copy size={11} /> COPY KEY
+                              </button>
+                              <button
+                                type="button"
+                                onClick={downloadRecoveryKey}
+                                style={{ flex: 2, padding: '10px', borderRadius: '8px', background: recoveryDownloaded ? 'rgba(16,185,129,0.15)' : 'rgba(251,191,36,0.15)', border: recoveryDownloaded ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(251,191,36,0.3)', color: recoveryDownloaded ? '#10B981' : '#FBBF24', fontSize: '10px', fontFamily: 'monospace', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                              >
+                                <Download size={11} /> {recoveryDownloaded ? 'SAVED ✓' : 'SAVE TO DEVICE'}
+                              </button>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setRegStep(2)}
+                                style={{ flex: 1, padding: '12px', borderRadius: '8px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontFamily: 'monospace', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer' }}
+                              >
+                                BACK
                               </button>
                               <motion.button
                                 id="reg-submit-btn"
                                 type="submit"
-                                disabled={loadingReg}
-                                whileHover={{ scale: loadingReg ? 1 : 1.02 }}
-                                whileTap={{ scale: loadingReg ? 1 : 0.98 }}
-                                style={{ ...styles.loginBtn, flex: 2 }}
+                                disabled={loadingReg || !recoveryDownloaded}
+                                whileHover={{ scale: (loadingReg || !recoveryDownloaded) ? 1 : 1.02 }}
+                                whileTap={{ scale: (loadingReg || !recoveryDownloaded) ? 1 : 0.98 }}
+                                style={{
+                                  ...styles.loginBtn,
+                                  flex: 2,
+                                  opacity: recoveryDownloaded ? 1 : 0.4,
+                                  cursor: recoveryDownloaded ? 'pointer' : 'not-allowed',
+                                  background: recoveryDownloaded ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : 'rgba(255,255,255,0.05)',
+                                  border: recoveryDownloaded ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(255,255,255,0.1)'
+                                }}
                               >
-                                {loadingReg ? <div style={styles.spinner} /> : <span style={styles.loginBtnText}>CREATE ACCOUNT 🔥</span>}
+                                {loadingReg ? <div style={styles.spinner} /> : <span style={{ ...styles.loginBtnText, color: recoveryDownloaded ? '#fff' : '#888' }}>ENTER THE FORGE</span>}
                               </motion.button>
                             </div>
                           </motion.form>
@@ -508,8 +851,75 @@ export default function Login() {
                       </div>
                     </motion.div>
                   )}
+
+                  {/* ── RECOVERY FORM ── */}
+                  {tab === 'recover' && (
+                    <motion.div key="recover-form" initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }} transition={{ duration: 0.3 }}>
+                      <div style={styles.cardHeader}>
+                        <h2 style={styles.welcomeTitle}>ACCOUNT RECOVERY</h2>
+                        <p style={styles.welcomeSub}>Restore passcode access using recovery key</p>
+                      </div>
+
+                      <AnimatePresence>
+                        {recoverError && (
+                          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} style={styles.errorBox}>
+                            <AlertCircle size={14} color="#f87171" />
+                            <span style={{ color: '#fca5a5', fontSize: '12px' }}>{recoverError}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handleRecover} style={styles.form}>
+                        <div style={styles.inputWrapper}>
+                          <User size={15} color="#888" style={styles.inputIcon} />
+                          <input id="recover-email" type="email" value={recoverEmail} onChange={e => setRecoverEmail(e.target.value)} placeholder="Email address" autoComplete="email" style={styles.input}
+                            onFocus={e => e.target.style.borderColor = 'rgba(180,160,100,0.5)'}
+                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                          />
+                        </div>
+
+                        <div style={styles.inputWrapper}>
+                          <FileText size={15} color="#888" style={styles.inputIcon} />
+                          <input id="recover-key" type="text" value={recoverKey} onChange={e => setRecoverKey(e.target.value)} placeholder="12-word recovery phrase" style={styles.input}
+                            onFocus={e => e.target.style.borderColor = 'rgba(180,160,100,0.5)'}
+                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                          />
+                        </div>
+
+                        <div style={styles.inputWrapper}>
+                          <Lock size={15} color="#888" style={styles.inputIcon} />
+                          <input id="recover-pass" type="password" value={recoverNewPass} onChange={e => setRecoverNewPass(e.target.value)} placeholder="New Passcode (min 6 chars)" style={styles.input}
+                            onFocus={e => e.target.style.borderColor = 'rgba(180,160,100,0.5)'}
+                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                          />
+                        </div>
+
+                        <div style={styles.inputWrapper}>
+                          <Lock size={15} color="#888" style={styles.inputIcon} />
+                          <input id="recover-pass-conf" type="password" value={recoverNewPassConf} onChange={e => setRecoverNewPassConf(e.target.value)} placeholder="Confirm new passcode" style={styles.input}
+                            onFocus={e => e.target.style.borderColor = 'rgba(180,160,100,0.5)'}
+                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                          />
+                        </div>
+
+                        <motion.button id="recover-submit" type="submit" disabled={loadingRecover} whileHover={{ scale: loadingRecover ? 1 : 1.02 }} whileTap={{ scale: loadingRecover ? 1 : 0.98 }} style={{ ...styles.loginBtn, background: 'linear-gradient(135deg, #10B981 0%, #00E5FF 100%)', border: '1px solid rgba(16,185,129,0.35)' }}>
+                          {loadingRecover ? <div style={styles.spinner} /> : <span style={{ ...styles.loginBtnText, color: '#fff' }}>RESET PASSCODE & LOGIN</span>}
+                        </motion.button>
+                      </form>
+
+                      <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                        <button onClick={() => setTab('login')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '11px', fontFamily: 'monospace', cursor: 'pointer', letterSpacing: '0.08em' }}>
+                          ← Back to Login
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
                 </AnimatePresence>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Biometric Scanning Simulation Modal Overlay */}
       <AnimatePresence>
         {biometricScan && (
@@ -573,23 +983,89 @@ export default function Login() {
               {/* Option Grid */}
               {biometricStatus === 'SELECTING' && (
                 <div className="flex flex-col gap-2 w-full mt-2">
-                  {[
-                    { id: 'founder', name: 'Founder Profile', details: 'Face ID · founder@maxxforge.com' },
-                    { id: 'staff', name: 'Staff Profile', details: 'Fingerprint · staff@maxxforge.com' },
-                    { id: 'member', name: 'Member Profile', details: 'Touch ID · member@maxxforge.com' }
-                  ].map(user => (
+                  {getBiometricProfiles().map(profile => (
                     <button
-                      key={user.id}
-                      onClick={() => triggerBiometricScan(user.id)}
+                      key={profile.email}
+                      onClick={() => triggerBiometricScan(profile)}
                       className="w-full p-3 bg-white/3 border border-white/5 hover:border-cyan-500/40 rounded-2xl text-left hover:bg-white/5 transition flex justify-between items-center group"
                     >
                       <div>
-                        <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition">{user.name}</p>
-                        <p className="text-[9px] font-mono text-white/30 mt-0.5">{user.details}</p>
+                        <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition">{profile.name}</p>
+                        <p className="text-[9px] font-mono text-white/30 mt-0.5">{profile.details}</p>
                       </div>
                       <span className="text-[9px] font-mono text-cyan-400 opacity-0 group-hover:opacity-100 transition font-bold">Scan →</span>
                     </button>
                   ))}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Passkey Setup Prompt Modal Overlay */}
+      <AnimatePresence>
+        {passkeyPromptUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 15 }}
+              className="w-full max-w-sm bg-neutral-905 border border-white/10 rounded-3xl p-6 flex flex-col items-center gap-6 text-center shadow-2xl relative overflow-hidden"
+              style={{ background: 'rgba(12, 12, 16, 0.96)' }}
+            >
+              {/* Scan backplate */}
+              <div className="absolute inset-0 bg-radial-gradient from-cyan-500/5 to-transparent pointer-events-none" />
+
+              {/* Biometric Status Icon/Animation */}
+              <div className="relative w-28 h-28 flex items-center justify-center mt-2">
+                <div className="absolute inset-0 rounded-full border border-cyan-500/20 animate-ping" style={{ animationDuration: '3s' }} />
+                <div className="absolute inset-2 rounded-full border border-cyan-500/10 animate-pulse" />
+                
+                {passkeySetupScanning ? (
+                  <div className="text-cyan-400 animate-pulse flex flex-col items-center justify-center">
+                    <Fingerprint size={48} className="animate-bounce" />
+                    <div className="absolute bottom-[-15px] text-[8px] font-mono tracking-widest text-cyan-400/60 uppercase">SCANNING...</div>
+                  </div>
+                ) : passkeySetupSuccess ? (
+                  <div className="text-emerald-400 scale-110 transition duration-300">
+                    <CheckCircle2 size={54} />
+                  </div>
+                ) : (
+                  <div className="text-cyan-500/80">
+                    <Fingerprint size={48} />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-display font-bold uppercase tracking-wider text-white">
+                  {passkeySetupScanning ? 'Registering credentials' : passkeySetupSuccess ? 'Biometrics Activated' : 'Enable Device Passkey?'}
+                </h3>
+                <p className="text-[10px] font-mono text-white/40 mt-1">
+                  {passkeySetupScanning ? 'Generating local cryptographic key enclave...' : passkeySetupSuccess ? 'Secure passkey locked to this device.' : `Would you like to register a secure biometric passkey for ${passkeyPromptUser.name} on this device?`}
+                </p>
+              </div>
+
+              {!passkeySetupScanning && !passkeySetupSuccess && (
+                <div className="flex flex-col gap-2 w-full mt-2">
+                  <button
+                    onClick={handleEnablePasskey}
+                    className="w-full p-3.5 bg-gradient-to-r from-cyan-500 to-indigo-500 text-neutral-950 font-bold text-xs rounded-2xl hover:scale-102 active:scale-98 transition shadow-[0_0_20px_rgba(0,229,255,0.25)] flex items-center justify-center gap-2"
+                  >
+                    <Fingerprint size={14} />
+                    ENABLE BIOMETRIC LOGIN
+                  </button>
+                  <button
+                    onClick={handleSkipPasskey}
+                    className="w-full p-3.5 bg-transparent border border-white/10 hover:border-white/20 text-white/40 hover:text-white/60 font-semibold text-xs rounded-2xl transition"
+                  >
+                    SKIP FOR NOW
+                  </button>
                 </div>
               )}
             </motion.div>
@@ -663,6 +1139,6 @@ const styles = {
 if (typeof document !== 'undefined' && !document.getElementById('login-styles')) {
   const s = document.createElement('style');
   s.id = 'login-styles';
-  s.textContent = `@keyframes spin{to{transform:rotate(360deg)}} input::placeholder{color:rgba(255,255,255,0.28)!important} @media(max-width:768px){.login-left-panel{display:none!important}}`;
+  s.textContent = `@keyframes spin{to{transform:rotate(360deg)}} input::placeholder{color:rgba(255,255,255,0.28)!important} @media(max-width:768px){.login-left-panel{display:none!important} .login-layout{flex-direction:column!important;padding:24px 16px!important;justify-content:center!important} .login-right-panel{padding:20px 0!important;width:100%!important;max-width:100%!important;align-items:center!important} .login-brand-block{align-items:center!important;text-align:center!important;margin-bottom:12px!important;width:100%!important} .login-card{padding:20px 16px!important;width:100%!important;max-width:100%!important}}`;
   document.head.appendChild(s);
 }

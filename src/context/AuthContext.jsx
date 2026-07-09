@@ -3,6 +3,17 @@ import { v4 as uuidv4 } from 'uuid';
 import { getUsers, saveUsers, getUserByEmail, initializeUsers, hasPermission, ROLES } from '../data/users.js';
 import { initializeFeed } from '../data/feed.js';
 import { publish } from '../data/realtime.js';
+import { initializeReleases } from '../data/releases.js';
+
+// Change Log: cleanup for bugs summer - Added recovery key system and custom profile accent helpers.
+const WORDLIST = ['forge', 'matrix', 'aries', 'neon', 'digital', 'glass', 'music', 'quantum', 'cyber', 'laser', 'studio', 'future', 'sound', 'creative', 'logic', 'arcade', 'visual', 'canvas', 'telemetry', 'system', 'vector', 'node', 'pipeline', 'reactor'];
+export function generateRecoveryKey() {
+  const words = [];
+  for (let i = 0; i < 12; i++) {
+    words.push(WORDLIST[Math.floor(Math.random() * WORDLIST.length)]);
+  }
+  return words.join(' ');
+}
 
 const AuthContext = createContext(null);
 
@@ -80,6 +91,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     initializeUsers();
     initializeFeed();
+    initializeReleases();
     
     // Restore session
     const savedSession = localStorage.getItem('mfs_session');
@@ -194,7 +206,7 @@ export function AuthProvider({ children }) {
   }, [currentUser]);
 
   // ---- Full account registration ----
-  const registerMember = useCallback(async (name, email, password, avatarEmoji = null) => {
+  const registerMember = useCallback(async (name, email, password, avatarEmoji = null, customRecoveryKey = null) => {
     if (!name || name.trim().length < 2) return { success: false, error: 'Display name must be at least 2 characters.' };
     if (!email || !email.includes('@')) return { success: false, error: 'Please enter a valid email address.' };
     if (!password || password.length < 6) return { success: false, error: 'Password must be at least 6 characters.' };
@@ -203,6 +215,8 @@ export function AuthProvider({ children }) {
     if (existing) return { success: false, error: 'An account with this email already exists.' };
 
     await new Promise(r => setTimeout(r, 500)); // Simulate network delay
+
+    const recoveryKey = customRecoveryKey || generateRecoveryKey();
 
     const newUser = {
       id: `usr_${uuidv4()}`,
@@ -219,6 +233,9 @@ export function AuthProvider({ children }) {
       department: 'Community',
       badge: '⭐ Member',
       isGuest: false,
+      recoveryKey,
+      profileAccent: '#10B981',
+      profileTheme: 'obsidian',
     };
 
     const users = getUsers();
@@ -233,6 +250,70 @@ export function AuthProvider({ children }) {
 
     return { success: true, user: newUser };
   }, []);
+
+  // ---- Password Recovery ----
+  const recoverAccount = useCallback(async (email, recoveryKey, newPassword) => {
+    if (!email || !recoveryKey || !newPassword) {
+      return { success: false, error: 'All fields are required.' };
+    }
+    if (newPassword.length < 6) {
+      return { success: false, error: 'New password must be at least 6 characters.' };
+    }
+
+    await new Promise(r => setTimeout(r, 600)); // Simulate network delay
+
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase().trim());
+    if (userIndex === -1) {
+      return { success: false, error: 'No account found with this email address.' };
+    }
+
+    const user = users[userIndex];
+    const userKey = user.recoveryKey || '';
+    if (!userKey || userKey.toLowerCase().trim() !== recoveryKey.toLowerCase().trim()) {
+      return { success: false, error: 'Invalid recovery key.' };
+    }
+
+    // Reset password
+    const updatedUser = { ...user, password: newPassword };
+    const updatedUsers = [...users];
+    updatedUsers[userIndex] = updatedUser;
+    saveUsers(updatedUsers);
+
+    addSessionLog({ action: 'PASSWORD_RECOVERED', email: user.email, userId: user.id });
+
+    // Clear failed attempts
+    const attempts = JSON.parse(localStorage.getItem('mfs_failed_attempts') || '{}');
+    const emailKey = email.toLowerCase();
+    delete attempts[emailKey];
+    localStorage.setItem('mfs_failed_attempts', JSON.stringify(attempts));
+    setFailedAttempts(attempts);
+
+    return { success: true, user: updatedUser };
+  }, []);
+
+  // ---- Update User Profile (Customizations) ----
+  const updateUserProfile = useCallback(async (updates) => {
+    if (!currentUser) return { success: false, error: 'Not authenticated.' };
+
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.id === currentUser.id);
+    if (userIndex === -1) {
+      // For guests, update state only
+      const updatedUser = { ...currentUser, ...updates };
+      setCurrentUser(updatedUser);
+      return { success: true, user: updatedUser };
+    }
+
+    const updatedUser = { ...users[userIndex], ...updates };
+    const updatedUsers = [...users];
+    updatedUsers[userIndex] = updatedUser;
+    saveUsers(updatedUsers);
+    setCurrentUser(updatedUser);
+
+    addSessionLog({ action: 'PROFILE_UPDATED', email: updatedUser.email, userId: updatedUser.id });
+    return { success: true, user: updatedUser };
+  }, [currentUser]);
 
   // ---- Guest session ----
   const guestLogin = useCallback(() => {
@@ -302,6 +383,105 @@ export function AuthProvider({ children }) {
     setCalendarEvents(updated);
   };
 
+  // ── Staff: Account Management Functions ──
+
+  const generateOneTimeRecoveryKey = (userId) => {
+    const users = getUsers();
+    const user = users.find(u => u.id === userId);
+    if (!user) return null;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const key = Array.from({ length: 4 }, () =>
+      Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    ).join('-');
+    const record = { userId, key, email: user.email, createdAt: new Date().toISOString(), used: false };
+    const existing = JSON.parse(localStorage.getItem('mfs_otp_keys') || '[]');
+    const filtered = existing.filter(r => r.userId !== userId); // one active key per user
+    localStorage.setItem('mfs_otp_keys', JSON.stringify([record, ...filtered]));
+    addSessionLog({ action: 'OTP_KEY_GENERATED', targetUserId: userId, email: user.email });
+    return key;
+  };
+
+  const validateOneTimeKey = (email, key) => {
+    try {
+      const records = JSON.parse(localStorage.getItem('mfs_otp_keys') || '[]');
+      const record = records.find(r =>
+        r.email.toLowerCase() === email.toLowerCase() &&
+        r.key === key.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(....)/g, '$1-').slice(0, 19) &&
+        !r.used
+      );
+      if (!record) return { success: false, error: 'Invalid or expired recovery key.' };
+      const ageMs = Date.now() - new Date(record.createdAt).getTime();
+      if (ageMs > 24 * 60 * 60 * 1000) return { success: false, error: 'Recovery key has expired (24h limit).' };
+      // Mark used
+      const updated = records.map(r => r.userId === record.userId ? { ...r, used: true } : r);
+      localStorage.setItem('mfs_otp_keys', JSON.stringify(updated));
+      const users = getUsers();
+      const user = users.find(u => u.id === record.userId);
+      return { success: true, user };
+    } catch (_) {
+      return { success: false, error: 'Key validation failed.' };
+    }
+  };
+
+  const changeUserEmail = (userId, newEmail) => {
+    const users = getUsers();
+    const exists = users.find(u => u.email.toLowerCase() === newEmail.toLowerCase() && u.id !== userId);
+    if (exists) return { success: false, error: 'Email already in use.' };
+    const updated = users.map(u => u.id === userId ? { ...u, email: newEmail } : u);
+    saveUsers(updated);
+    if (currentUser?.id === userId) setCurrentUser(prev => ({ ...prev, email: newEmail }));
+    addSessionLog({ action: 'EMAIL_CHANGED', targetUserId: userId, newEmail });
+    return { success: true };
+  };
+
+  const clearAccountLockout = (email) => {
+    const attempts = JSON.parse(localStorage.getItem('mfs_failed_attempts') || '{}');
+    const emailKey = email.toLowerCase();
+    delete attempts[emailKey];
+    localStorage.setItem('mfs_failed_attempts', JSON.stringify(attempts));
+    setFailedAttempts(attempts);
+    addSessionLog({ action: 'LOCKOUT_CLEARED', email });
+    return { success: true };
+  };
+
+  const submitDiagnosticReport = (report) => {
+    const reports = JSON.parse(localStorage.getItem('mfs_diagnostic_reports') || '[]');
+    const newReport = {
+      id: uuidv4(),
+      ...report,
+      submittedAt: new Date().toISOString(),
+      staffId: currentUser?.id,
+      staffName: currentUser?.name,
+    };
+    const updated = [newReport, ...reports];
+    localStorage.setItem('mfs_diagnostic_reports', JSON.stringify(updated));
+    // Also push to proposals for Admin visibility
+    const proposals = JSON.parse(localStorage.getItem('mfs_proposals') || '[]');
+    proposals.unshift({
+      id: uuidv4(),
+      title: `[DIAG] ${report.title || 'Staff Diagnostic Report'}`,
+      body: report.notes || '',
+      category: 'diagnostics',
+      authorId: currentUser?.id,
+      authorName: currentUser?.name,
+      createdAt: new Date().toISOString(),
+      status: report.escalate ? 'review' : 'submitted',
+      priority: report.escalate ? 'high' : 'normal',
+    });
+    localStorage.setItem('mfs_proposals', JSON.stringify(proposals));
+    publish('diagnostic_report_submitted', { staffId: currentUser?.id, staffName: currentUser?.name, title: newReport.title });
+    addSessionLog({ action: 'DIAGNOSTIC_REPORT_SUBMITTED', reportId: newReport.id });
+    return { success: true, reportId: newReport.id };
+  };
+
+  const getOtpKeys = () => {
+    try { return JSON.parse(localStorage.getItem('mfs_otp_keys') || '[]'); } catch (_) { return []; }
+  };
+
+  const getDiagnosticReports = () => {
+    try { return JSON.parse(localStorage.getItem('mfs_diagnostic_reports') || '[]'); } catch (_) { return []; }
+  };
+
   // Chat tickets
   const createChatTicket = (ticket) => {
     const tickets = JSON.parse(localStorage.getItem('mfs_chat_tickets') || '[]');
@@ -327,10 +507,14 @@ export function AuthProvider({ children }) {
     currentUser, isLoading,
     sessionLogs, failedAttempts, onlineStaff,
     chatTickets, formSubmissions, calendarEvents,
-    login, logout, registerMember, guestLogin,
+    login, logout, registerMember, guestLogin, recoverAccount, updateUserProfile,
     submitForm, updateSubmission,
     addCalendarEvent, deleteCalendarEvent,
     createChatTicket,
+    // Staff account management
+    generateOneTimeRecoveryKey, validateOneTimeKey,
+    changeUserEmail, clearAccountLockout,
+    submitDiagnosticReport, getOtpKeys, getDiagnosticReports,
     can, isGuest,
     getSimulatedIP,
   };

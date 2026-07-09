@@ -54,6 +54,9 @@ export const PERMISSIONS = {
     'delete_own_post',
     // Settings
     'view_settings', 'edit_profile',
+    // Account management
+    'change_email', 'generate_recovery_key', 'clear_lockout',
+    'view_all_users', 'submit_diagnostic_report',
   ],
   member: [
     // Dashboard core
@@ -113,6 +116,7 @@ export const hasPermission = (role, permission) => {
   return PERMISSIONS[role]?.includes(permission) ?? false;
 };
 
+// Change Log: cleanup for bugs summer - Added recovery keys and customizable profile data parameters.
 // ---- Pre-seeded accounts ----
 export const SEED_USERS = [
   {
@@ -129,6 +133,9 @@ export const SEED_USERS = [
     department: 'Executive',
     badge: '🔥 Founder',
     photo: null, // Set to '/brand/maximus-photo.jpg' when you add the file
+    recoveryKey: 'maxx-forge-founder-secret-key-2026',
+    profileAccent: '#10B981',
+    profileTheme: 'obsidian',
   },
   {
     id: 'usr_staff_001',
@@ -144,6 +151,7 @@ export const SEED_USERS = [
     department: 'Live Events',
     badge: '⚡ Events Lead',
     photo: null,
+    recoveryKey: 'maxx-forge-staff-em-key-2026',
   },
   {
     id: 'usr_staff_002',
@@ -159,6 +167,7 @@ export const SEED_USERS = [
     department: 'Technology',
     badge: '🤖 Tech Lead',
     photo: null,
+    recoveryKey: 'maxx-forge-staff-zeppelin-key-2026',
   },
 ];
 

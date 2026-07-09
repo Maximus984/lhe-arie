@@ -4,8 +4,9 @@ import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Stars, Float, Sphere, MeshDistortMaterial, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-import IntroSequence3D from '../components/IntroSequence3D.jsx';
+import HeadlinerLoadingScreen from '../components/HeadlinerLoadingScreen.jsx';
 import AIChatSystem from '../components/AIChatSystem.jsx';
+import AllStarHub from '../components/AllStarHub.jsx';
 import { Disc, Zap, Cpu, Gamepad2, ArrowRight, Music, Star, Globe, Users, Award, ChevronDown, Sparkles } from 'lucide-react';
 import LiveViewerCounter from '../components/LiveViewerCounter.jsx';
 
@@ -37,18 +38,19 @@ function HeroParticle({ pos, color }) {
   );
 }
 
+// Change Log: cleanup for bugs summer - Fixed React hooks rendering count mismatch on Landing page scroll.
 function HeroBrickPlane() {
   const meshRef = useRef();
-  // Load texture
-  let texture = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    texture = useTexture('/brand/neon-brick.jpg');
+  // Load texture unconditionally to adhere to React Rules of Hooks
+  const texture = useTexture('/brand/neon-brick.jpg');
+
+  // Configure texture parameters once loaded
+  useEffect(() => {
     if (texture) {
       texture.wrapS = THREE.ClampToEdgeWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
     }
-  } catch {}
+  }, [texture]);
 
   useFrame(({ clock, mouse }) => {
     if (meshRef.current) {
@@ -384,7 +386,7 @@ export default function Landing() {
   };
 
   if (!introComplete) {
-    return <IntroSequence3D onComplete={handleIntroComplete} />;
+    return <HeadlinerLoadingScreen onComplete={handleIntroComplete} />;
   }
 
   return (
@@ -393,7 +395,7 @@ export default function Landing() {
       <nav className={`fixed top-0 left-0 right-0 z-40 px-6 md:px-12 py-4 flex items-center justify-between transition-all duration-500 ${scrolled ? 'bg-[#050508]/90 backdrop-blur-xl border-b border-white/5' : 'bg-transparent'}`}>
         <div className="flex items-center gap-2.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]" />
-          <span className="font-display font-black text-lg tracking-widest text-white">MAXX FORGE <span className="text-emerald-400">STUDIO™</span></span>
+          <span className="font-display font-black text-xs sm:text-lg tracking-wide sm:tracking-widest text-white">MAXX FORGE <span className="text-emerald-400">STUDIO™</span></span>
         </div>
         <div className="flex items-center gap-3">
           <a href="#pillars" className="hidden md:block text-xs font-mono text-white/40 hover:text-white/80 tracking-wider uppercase transition">Divisions</a>
@@ -564,6 +566,18 @@ export default function Landing() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* The All-Star Hub Interactive Section */}
+      <section id="all-star-hub" className="py-20 px-6 max-w-6xl mx-auto relative z-10">
+        <RevealSection>
+          <div className="flex flex-col items-center text-center gap-4 mb-12">
+            <span className="px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-[10px] font-mono text-cyan-400 uppercase tracking-wider">Interactive Core</span>
+            <h2 className="text-4xl md:text-5xl font-display font-black tracking-tight uppercase">The All-Star Hub</h2>
+            <p className="text-sm text-white/40 max-w-xl leading-relaxed font-mono">Stream deluxe music, explore canvas visualizers, and publish media drops directly in the ecosystem hub.</p>
+          </div>
+          <AllStarHub />
+        </RevealSection>
       </section>
 
       {/* Our Work */}

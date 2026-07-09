@@ -1,19 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, MessageCircle, FileText, Calendar, ArrowLeft, Send, CheckCircle, Clock, Radio, Sliders, Camera, Tv, Activity, Check, Plus, Trash2, Settings, Zap, Eye, EyeOff, Upload } from 'lucide-react';
+import { Terminal, MessageCircle, FileText, Calendar, ArrowLeft, Send, CheckCircle, Clock, Radio, Sliders, Camera, Tv, Activity, Check, Plus, Trash2, Settings, Zap, Eye, EyeOff, Upload, Users, Key, Mail, ShieldOff, ClipboardList, BarChart3, AlertTriangle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useEffect } from 'react';
 import { subscribe, publish } from '../data/realtime.js';
 import { setLiveMode, getLiveModeConfig } from '../data/liveMode.js';
+import { getUsers } from '../data/users.js';
 
 export default function StaffPortal() {
-  const { chatTickets, formSubmissions, updateSubmission, calendarEvents, addCalendarEvent } = useAuth();
+  const { currentUser, chatTickets, formSubmissions, updateSubmission, calendarEvents, addCalendarEvent, generateOneTimeRecoveryKey, changeUserEmail, clearAccountLockout, submitDiagnosticReport, failedAttempts, can } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('chats'); // chats | forms | schedule | live-control | live-mode
+  const [activeTab, setActiveTab] = useState('chats'); // chats | forms | schedule | live-control | live-mode | accounts | daily
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
+
+  // === Account Management State ===
+  const [allUsers, setAllUsers] = useState(() => getUsers());
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [emailEditVal, setEmailEditVal] = useState('');
+  const [emailEditing, setEmailEditing] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState(null);
+  const [keyUserId, setKeyUserId] = useState(null);
+  const [accountSearch, setAccountSearch] = useState('');
+
+  // === Daily Check-In State ===
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const taskStorageKey = `mfs_daily_tasks_${currentUser?.id}_${todayKey}`;
+  const DAILY_TASKS = [
+    'Morning system check-in',
+    'Review pending chat tickets',
+    'Check form submissions inbox',
+    'Confirm event schedule for today',
+    'Broadcast readiness check',
+    'Review any escalated reports',
+    'Community feed moderation sweep',
+    'End-of-shift diagnostic report'
+  ];
+  const [checkedTasks, setCheckedTasks] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(taskStorageKey) || '[]'); } catch { return []; }
+  });
+  const [diagTitle, setDiagTitle] = useState('');
+  const [diagNotes, setDiagNotes] = useState('');
+  const [diagSystemStatus, setDiagSystemStatus] = useState('operational');
+  const [diagIssues, setDiagIssues] = useState('');
+  const [diagEscalate, setDiagEscalate] = useState(false);
+  const [submittingDiag, setSubmittingDiag] = useState(false);
+  const [diagSubmitted, setDiagSubmitted] = useState(false);
+  
+  // Streak
+  const [checkInStreak, setCheckInStreak] = useState(() => {
+    try { return parseInt(localStorage.getItem(`mfs_checkin_streak_${currentUser?.id}`) || '0'); } catch { return 0; }
+  });
+
+  const refreshUsers = () => setAllUsers(getUsers());
 
   // Live Mode state
   const [liveModeConfig, setLiveModeConfig] = useState(getLiveModeConfig);
@@ -69,6 +109,8 @@ export default function StaffPortal() {
           localStorage.setItem('mfs_live_chat_logs', JSON.stringify(updated));
           return updated;
         });
+      } else if (event === 'diagnostic_report_submitted') {
+        toast(`📋 Diagnostic report submitted by ${data.staffName || 'staff'}`, { icon: '📋', duration: 5000, style: { borderLeft: '3px solid #a78bfa' } });
       }
     });
 
@@ -221,6 +263,8 @@ export default function StaffPortal() {
             { id: 'chats', label: 'Escalated AI Chats', icon: <MessageCircle size={14} /> },
             { id: 'forms', label: 'Proposals Inbox', icon: <FileText size={14} /> },
             { id: 'schedule', label: 'Shift Schedule', icon: <Calendar size={14} /> },
+            { id: 'accounts', label: 'Accounts', icon: <Users size={14} /> },
+            { id: 'daily', label: 'Daily Check-In', icon: <ClipboardList size={14} /> },
             { id: 'live-control', label: 'TikTok Live Studio', icon: <Radio size={14} /> },
             { id: 'live-mode', label: '🔴 Live Mode', icon: <Zap size={14} /> },
           ].map(tab => (
@@ -758,6 +802,336 @@ export default function StaffPortal() {
                   WATCH LIVE →
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── ACCOUNTS TAB ─── */}
+        {activeTab === 'accounts' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+              <div>
+                <h2 className="text-lg font-display font-black tracking-wider uppercase">Account Management</h2>
+                <p className="text-xs font-mono text-white/30 mt-0.5">Manage user accounts, emails, lockouts & recovery keys</p>
+              </div>
+              <button onClick={refreshUsers} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-mono text-white/50 hover:border-pink-500/40 hover:text-pink-300 transition">
+                <RefreshCw size={12} />
+                Refresh
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search users by name or email…"
+              value={accountSearch}
+              onChange={e => setAccountSearch(e.target.value)}
+              className="w-full bg-white/3 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-pink-500/40"
+            />
+
+            <div className="flex flex-col gap-3">
+              {allUsers
+                .filter(u => !accountSearch || u.name?.toLowerCase().includes(accountSearch.toLowerCase()) || u.email?.toLowerCase().includes(accountSearch.toLowerCase()))
+                .map(user => {
+                  const isLocked = (JSON.parse(localStorage.getItem('mfs_failed_attempts') || '{}'))[user.email?.toLowerCase()] >= 5;
+                  const activeKey = JSON.parse(localStorage.getItem('mfs_otp_keys') || '[]').find(k => k.userId === user.id && !k.used);
+                  return (
+                    <div key={user.id} className="bg-white/3 border border-white/8 rounded-2xl p-4 flex flex-col gap-3">
+                      <div className="flex items-center justify-between flex-wrap gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-pink-500/15 border border-pink-500/20 flex items-center justify-center text-sm font-bold text-pink-300">
+                            {user.avatar || user.name?.[0] || '?'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white">{user.displayName || user.name}</p>
+                            <p className="text-[10px] font-mono text-white/40">{user.email} · <span className="text-white/25 capitalize">{user.role}</span></p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isLocked && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/25 text-red-400 text-[9px] font-mono font-bold uppercase flex items-center gap-1">
+                              <ShieldOff size={9} /> Locked
+                            </span>
+                          )}
+                          {activeKey && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/25 text-amber-400 text-[9px] font-mono font-bold uppercase flex items-center gap-1">
+                              <Key size={9} /> OTP Active
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setSelectedUser(selectedUser?.id === user.id ? null : user)}
+                            className="text-[10px] font-mono text-white/40 hover:text-white/70 px-3 py-1.5 rounded-lg border border-white/8 hover:border-white/20 transition"
+                          >
+                            {selectedUser?.id === user.id ? 'Close ▲' : 'Manage ▼'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {selectedUser?.id === user.id && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22 }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
+                              {/* Change Email */}
+                              <div className="bg-white/2 rounded-xl p-3 flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Mail size={12} className="text-white/40" />
+                                  <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">Change Email</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="email"
+                                    value={emailEditing && keyUserId === user.id ? emailEditVal : ''}
+                                    placeholder={user.email}
+                                    onChange={e => setEmailEditVal(e.target.value)}
+                                    onFocus={() => { setEmailEditing(true); setKeyUserId(user.id); setEmailEditVal(''); }}
+                                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-pink-500/30"
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      if (!emailEditVal.trim() || !emailEditVal.includes('@')) { toast.error('Enter a valid email'); return; }
+                                      const res = changeUserEmail(user.id, emailEditVal.trim());
+                                      if (res.success) { toast.success('Email updated!'); refreshUsers(); setEmailEditing(false); setEmailEditVal(''); }
+                                      else toast.error(res.error);
+                                    }}
+                                    className="px-3 py-1.5 bg-pink-500/15 border border-pink-500/25 hover:border-pink-500/50 text-pink-300 text-[10px] font-mono font-bold rounded-lg transition"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* One-Time Recovery Key */}
+                              <div className="bg-white/2 rounded-xl p-3 flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Key size={12} className="text-white/40" />
+                                  <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">One-Time Recovery Key</span>
+                                </div>
+                                {generatedKey && keyUserId === user.id ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-3 py-2.5 font-mono text-sm font-bold text-emerald-300 tracking-widest text-center">
+                                      {generatedKey}
+                                    </div>
+                                    <p className="text-[9px] font-mono text-white/30 text-center">Share with user. Expires 24h · One-use only.</p>
+                                    <button
+                                      onClick={() => { navigator.clipboard.writeText(generatedKey); toast.success('Key copied!'); }}
+                                      className="text-[10px] font-mono text-white/50 hover:text-white/80 transition"
+                                    >Copy to clipboard ↗</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      const key = generateOneTimeRecoveryKey(user.id);
+                                      if (key) { setGeneratedKey(key); setKeyUserId(user.id); toast.success('One-time recovery key generated!'); }
+                                      else toast.error('Failed to generate key.');
+                                    }}
+                                    className="flex items-center justify-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold rounded-lg transition"
+                                  >
+                                    <Key size={11} />
+                                    Generate OTP Recovery Key
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Clear Lockout */}
+                              {isLocked && (
+                                <button
+                                  onClick={() => {
+                                    clearAccountLockout(user.email);
+                                    toast.success(`Lockout cleared for ${user.name}!`);
+                                    refreshUsers();
+                                  }}
+                                  className="flex items-center justify-center gap-2 p-2.5 bg-red-500/10 border border-red-500/20 hover:border-red-500/40 text-red-300 text-[10px] font-mono font-bold rounded-lg transition"
+                                >
+                                  <ShieldOff size={11} />
+                                  CLEAR ACCOUNT LOCKOUT
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* ─── DAILY CHECK-IN TAB ─── */}
+        {activeTab === 'daily' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div>
+                <h2 className="text-lg font-display font-black tracking-wider uppercase">Daily Check-In</h2>
+                <p className="text-xs font-mono text-white/30 mt-0.5">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+              </div>
+              {checkInStreak > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                  <span className="text-base">🔥</span>
+                  <span className="text-xs font-mono font-bold text-amber-300">{checkInStreak} Day Streak</span>
+                </div>
+              )}
+            </div>
+
+            {/* Task Checklist */}
+            <div className="bg-white/3 border border-white/8 rounded-2xl p-5">
+              <h3 className="text-xs font-mono text-white/40 uppercase tracking-wider mb-4">Today's Task List</h3>
+              <div className="flex flex-col gap-2">
+                {DAILY_TASKS.map((task, idx) => {
+                  const done = checkedTasks.includes(idx);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        const updated = done ? checkedTasks.filter(i => i !== idx) : [...checkedTasks, idx];
+                        setCheckedTasks(updated);
+                        localStorage.setItem(taskStorageKey, JSON.stringify(updated));
+                        if (!done && updated.length === DAILY_TASKS.length) {
+                          const newStreak = checkInStreak + 1;
+                          setCheckInStreak(newStreak);
+                          localStorage.setItem(`mfs_checkin_streak_${currentUser?.id}`, String(newStreak));
+                          toast.success('🎉 All daily tasks complete! Streak updated!');
+                        }
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition group ${
+                        done
+                          ? 'bg-emerald-500/10 border-emerald-500/20'
+                          : 'bg-white/2 border-white/6 hover:border-pink-500/20 hover:bg-pink-500/3'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${
+                        done ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 group-hover:border-pink-500/50'
+                      }`}>
+                        {done && <Check size={10} className="text-white" strokeWidth={3} />}
+                      </div>
+                      <span className={`text-xs font-medium transition ${done ? 'text-white/40 line-through' : 'text-white/70'}`}>{task}</span>
+                      {task === 'End-of-shift diagnostic report' && !done && (
+                        <span className="ml-auto text-[9px] font-mono text-pink-400/60 font-bold">↓ fill below</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-4">
+                <div className="flex justify-between mb-1">
+                  <span className="text-[10px] font-mono text-white/30">Progress</span>
+                  <span className="text-[10px] font-mono text-white/50">{checkedTasks.length}/{DAILY_TASKS.length}</span>
+                </div>
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-pink-500 to-violet-500 rounded-full transition-all duration-500"
+                    style={{ width: `${(checkedTasks.length / DAILY_TASKS.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Diagnostic Report Builder */}
+            <div className="bg-white/3 border border-white/8 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 size={14} className="text-pink-400" />
+                <h3 className="text-xs font-mono text-white/60 uppercase tracking-wider">End-of-Shift Diagnostic Report</h3>
+              </div>
+
+              {diagSubmitted ? (
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8 flex flex-col items-center gap-3">
+                  <CheckCircle size={40} className="text-emerald-400" />
+                  <p className="text-sm font-bold text-white">Report Submitted!</p>
+                  <p className="text-xs font-mono text-white/40">Synced to Admin Dashboard proposals registry.</p>
+                  <button onClick={() => { setDiagSubmitted(false); setDiagTitle(''); setDiagNotes(''); setDiagIssues(''); setDiagEscalate(false); setDiagSystemStatus('operational'); }}
+                    className="mt-2 text-[10px] font-mono text-white/30 hover:text-white/60 transition">Write Another →</button>
+                </motion.div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-wider block mb-1">Report Title</label>
+                    <input
+                      type="text"
+                      value={diagTitle}
+                      onChange={e => setDiagTitle(e.target.value)}
+                      placeholder={`End-of-shift check — ${new Date().toLocaleDateString()}`}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-pink-500/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-wider block mb-1">System Status</label>
+                    <select
+                      value={diagSystemStatus}
+                      onChange={e => setDiagSystemStatus(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-pink-500/30"
+                      style={{ colorScheme: 'dark' }}
+                    >
+                      <option value="operational">✅ Operational — everything running smoothly</option>
+                      <option value="degraded">⚠️ Degraded — minor issues detected</option>
+                      <option value="outage">🔴 Partial Outage — some services down</option>
+                      <option value="maintenance">🔧 Maintenance — scheduled work in progress</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-wider block mb-1">Issues / Observations</label>
+                    <textarea
+                      value={diagIssues}
+                      onChange={e => setDiagIssues(e.target.value)}
+                      placeholder="List any anomalies, bugs, user complaints, or system alerts observed during shift…"
+                      rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-pink-500/30 resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-wider block mb-1">Notes & Recommendations</label>
+                    <textarea
+                      value={diagNotes}
+                      onChange={e => setDiagNotes(e.target.value)}
+                      placeholder="Additional notes, action items, or recommendations for next shift…"
+                      rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-pink-500/30 resize-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDiagEscalate(v => !v)}
+                    className={`flex items-center gap-2 p-3 rounded-xl border transition ${
+                      diagEscalate
+                        ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                        : 'bg-white/2 border-white/8 text-white/40 hover:border-white/20'
+                    }`}
+                  >
+                    <AlertTriangle size={12} />
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider">
+                      {diagEscalate ? '⚠ Escalate to Admin — MARKED' : 'Mark as Escalation (Admin Review Required)'}
+                    </span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!diagTitle.trim()) { toast.error('Please enter a report title'); return; }
+                      setSubmittingDiag(true);
+                      await new Promise(r => setTimeout(r, 600));
+                      submitDiagnosticReport({
+                        title: diagTitle,
+                        notes: diagNotes,
+                        issues: diagIssues,
+                        systemStatus: diagSystemStatus,
+                        escalate: diagEscalate,
+                        tasksCompleted: checkedTasks.length,
+                        totalTasks: DAILY_TASKS.length,
+                      });
+                      setSubmittingDiag(false);
+                      setDiagSubmitted(true);
+                      toast.success('Diagnostic report submitted to Admin Panel!');
+                    }}
+                    disabled={submittingDiag}
+                    className="flex items-center justify-center gap-2 p-3.5 bg-gradient-to-r from-pink-600 to-violet-600 text-white font-bold text-xs rounded-xl hover:brightness-110 disabled:opacity-50 transition shadow-[0_0_20px_rgba(236,72,153,0.2)]"
+                  >
+                    {submittingDiag ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={12} />}
+                    SUBMIT DIAGNOSTIC REPORT
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

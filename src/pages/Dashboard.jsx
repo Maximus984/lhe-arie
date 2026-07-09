@@ -51,7 +51,9 @@ import {
   ChevronUp,
   Maximize2,
   Shield,
-  Menu
+  Download,
+  Menu,
+  PlusCircle
 } from 'lucide-react';
 
 
@@ -142,6 +144,7 @@ export default function App() {
   const [selectedHeadliner, setSelectedHeadliner] = useState(HEADLINERS[0]);
   const [activePlaylist, setActivePlaylist] = useState(HEADLINERS[0].tracks);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [visualizerStyle, setVisualizerStyle] = useState('ripples');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -269,6 +272,10 @@ export default function App() {
   }, [volume, isMuted]);
 
   useEffect(() => {
+    const styles = ['ripples', 'bars', 'particles', 'wave', 'orbit'];
+    const nextStyle = styles[Math.floor(Math.random() * styles.length)];
+    setVisualizerStyle(nextStyle);
+
     if (audioRef.current) {
       audioRef.current.load();
       if (isPlaying) {
@@ -511,28 +518,114 @@ export default function App() {
         ctx.fillRect(0, 0, width, height);
       } 
       else if (activeSection === 'records') {
-        // Core music visualization ring
-        ctx.beginPath();
-        ctx.arc(width / 2, height / 2, 160, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 229, 255, 0.04)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        const timeFactor = Date.now() * 0.003;
+        const soundAmp = isPlaying ? 1 : 0;
 
-        // Pulsing active concentric circles
-        if (isPlaying && Math.random() < 0.08) {
-          ripples.push({ r: 160, maxR: Math.max(width, height) * 0.7, opacity: 0.4 });
-        }
-        
-        ripples.forEach((rip, idx) => {
-          rip.r += 2.5;
-          rip.opacity -= 0.005;
+        if (visualizerStyle === 'ripples') {
+          // Core music visualization ring
           ctx.beginPath();
-          ctx.arc(width / 2, height / 2, rip.r, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(0, 229, 255, ${rip.opacity})`;
-          ctx.lineWidth = 1;
+          ctx.arc(width / 2, height / 2, 160, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(0, 229, 255, 0.04)';
+          ctx.lineWidth = 2;
           ctx.stroke();
-        });
-        ripples = ripples.filter(rip => rip.opacity > 0);
+
+          // Pulsing active concentric circles
+          if (isPlaying && Math.random() < 0.08) {
+            ripples.push({ r: 160, maxR: Math.max(width, height) * 0.7, opacity: 0.4 });
+          }
+          
+          ripples.forEach((rip, idx) => {
+            rip.r += 2.5;
+            rip.opacity -= 0.005;
+            ctx.beginPath();
+            ctx.arc(width / 2, height / 2, rip.r, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(0, 229, 255, ${rip.opacity})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          });
+          ripples = ripples.filter(rip => rip.opacity > 0);
+        }
+        else if (visualizerStyle === 'bars') {
+          // Equalizer Bars style
+          const barWidth = 10;
+          const gap = 8;
+          const numBars = Math.floor(width / (barWidth + gap));
+          ctx.fillStyle = 'rgba(0, 229, 255, 0.12)';
+          for (let i = 0; i < numBars; i++) {
+            const value = Math.abs(Math.sin(timeFactor + i * 0.18)) * (0.3 + Math.random() * 0.3) * soundAmp;
+            const barHeight = Math.max(8, value * height * 0.5);
+            ctx.fillRect(i * (barWidth + gap), height - barHeight, barWidth, barHeight);
+          }
+        }
+        else if (visualizerStyle === 'particles') {
+          // Particle burst from center
+          if (isPlaying && Math.random() < 0.25) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 2 + 1;
+            ripples.push({
+              type: 'particle',
+              x: width / 2,
+              y: height / 2,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              size: Math.random() * 3 + 1,
+              alpha: 1
+            });
+          }
+          
+          ripples.forEach(p => {
+            if (p.type === 'particle') {
+              p.x += p.vx;
+              p.y += p.vy;
+              p.alpha -= 0.015;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(0, 229, 255, ${p.alpha})`;
+              ctx.fill();
+            }
+          });
+          ripples = ripples.filter(p => p.type !== 'particle' || p.alpha > 0);
+        }
+        else if (visualizerStyle === 'wave') {
+          // Wave style
+          ctx.strokeStyle = 'rgba(0, 229, 255, 0.15)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          const sliceWidth = width / 50;
+          for (let i = 0; i < 50; i++) {
+            const val = Math.sin(timeFactor * 1.5 + i * 0.25) * 0.35 * soundAmp;
+            const y = height / 2 + val * height * 0.3;
+            if (i === 0) ctx.moveTo(0, y);
+            else ctx.lineTo(i * sliceWidth, y);
+          }
+          ctx.stroke();
+        }
+        else if (visualizerStyle === 'orbit') {
+          // Planet orbits style
+          const centerX = width / 2;
+          const centerY = height / 2;
+          const orbits = [
+            { r: 100, speed: 0.015, color: 'rgba(0, 229, 255, 0.2)', size: 8 },
+            { r: 180, speed: 0.009, color: 'rgba(168, 85, 247, 0.2)', size: 11 }
+          ];
+
+          orbits.forEach((orb) => {
+            const angle = Date.now() * orb.speed;
+            const rx = centerX + Math.cos(angle) * orb.r;
+            const ry = centerY + Math.sin(angle) * orb.r;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, orb.r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = orb.color;
+            ctx.beginPath();
+            ctx.arc(rx, ry, orb.size, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
       } 
       else if (activeSection === 'djem') {
         // Grid overlay
@@ -603,7 +696,7 @@ export default function App() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [activeSection, isPlaying]);
+  }, [activeSection, isPlaying, visualizerStyle]);
 
   return (
     <div className="relative min-h-screen text-paper-white wabi-sabi-paper overflow-hidden flex flex-col font-sans selection:bg-moss-green/20 selection:text-paper-white">
@@ -859,7 +952,7 @@ export default function App() {
                       </div>
 
                       <div>
-                        <h3 className="text-lg font-display font-bold group-hover:text-cyan-300 transition duration-300 mb-1">Prime Records</h3>
+                        <h3 className="text-lg font-display font-bold group-hover:text-cyan-300 transition duration-300 mb-1">The All-Star Hub</h3>
                         <p className="text-xs text-white/50 leading-relaxed font-light">
                           Sleek music visualizer and digital dashboard featuring the 2026 track archives.
                         </p>
@@ -1172,7 +1265,7 @@ export default function App() {
                 <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
                   <div className="flex items-center gap-3">
                     <Disc className={`text-cyber-blue ${isPlaying ? 'animate-spin' : ''}`} size={18} style={{ animationDuration: '4s' }} />
-                    <span className="text-sm font-display font-bold tracking-wider uppercase text-cyber-blue">Prime Records Suite</span>
+                    <span className="text-sm font-display font-bold tracking-wider uppercase text-cyber-blue">The All-Star Hub</span>
                     <span className="px-2.5 py-1 rounded bg-cyber-blue/10 border border-cyber-blue/20 text-[9px] font-mono text-cyber-blue font-bold">
                       AUDIO MASTER STREAM
                     </span>
@@ -1521,7 +1614,7 @@ export default function App() {
         <div className="w-[1px] h-6 bg-white/10"></div>
 
         <DockIcon 
-          label="Prime Records" 
+          label="The All-Star Hub" 
           active={activeSection === 'records'} 
           onClick={() => setActiveSection('records')}
           id="dock-records"
@@ -2757,10 +2850,19 @@ function GameMediaGallery() {
 // FORGE PROFILE DRAWER COMPONENT
 // =====================================================
 function AccountProfileModule({ favorites, setAccountOpen, setActiveSection, setCurrentTrackIndex, setIsPlaying }) {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateUserProfile } = useAuth();
   const navigate = useNavigate();
+  const [profileTab, setProfileTab] = useState('customize'); // 'customize' | 'activity' | 'sync' | 'quests' | 'security'
+  
+  // Customization States
   const [discordLinked, setDiscordLinked] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [revealKey, setRevealKey] = useState(false);
+  
+  // Profile Music States
+  const [profilePlaying, setProfilePlaying] = useState(false);
+  const [profileProgress, setProfileProgress] = useState(0);
+  const profileAudioRef = useRef(null);
 
   // Load quest states
   const listenedStr = localStorage.getItem('mfs_listened_tracks') || '[]';
@@ -2769,7 +2871,59 @@ function AccountProfileModule({ favorites, setAccountOpen, setActiveSection, set
   const isBadgeUnlocked = localStorage.getItem('mfs_unlock_ariana_badge') === 'true';
   const isSaturnUnlocked = localStorage.getItem('mfs_unlock_saturn') === 'true';
   
-  const equippedBanner = localStorage.getItem('mfs_equipped_banner') || 'default';
+  const equippedBanner = currentUser?.profileBanner || 'default';
+  const profileAccent = currentUser?.profileAccent || '#10B981';
+
+  // Audio Playback
+  const featuredTrackIndex = PLAYLIST.findIndex(t => t.id === (currentUser?.featuredTrackId || 1));
+  const featuredTrack = PLAYLIST[featuredTrackIndex !== -1 ? featuredTrackIndex : 0];
+
+  const handleAudioTimeUpdate = () => {
+    if (profileAudioRef.current) {
+      const current = profileAudioRef.current.currentTime;
+      const duration = profileAudioRef.current.duration || 1;
+      setProfileProgress((current / duration) * 100);
+    }
+  };
+
+  const toggleProfilePlayback = () => {
+    if (!profileAudioRef.current) return;
+    if (profilePlaying) {
+      profileAudioRef.current.pause();
+      setProfilePlaying(false);
+    } else {
+      // Pause parent dashboard player if it exists
+      setIsPlaying(false);
+      profileAudioRef.current.play().then(() => {
+        setProfilePlaying(true);
+      }).catch(() => {
+        toast.error('Autoplay blocked. Tap again.');
+      });
+    }
+  };
+
+  const handleTrackSelectChange = (trackId) => {
+    if (profileAudioRef.current) {
+      profileAudioRef.current.pause();
+      setProfilePlaying(false);
+      setProfileProgress(0);
+    }
+    updateUserProfile({ featuredTrackId: Number(trackId) });
+    toast.success(`Featured track updated!`);
+  };
+
+  const handleAccentChange = (color) => {
+    updateUserProfile({ profileAccent: color });
+    toast.success(`Profile accent customized!`);
+  };
+
+  const handleProfileThemeChange = (themeId) => {
+    updateUserProfile({ profileTheme: themeId });
+    localStorage.setItem('mfs_theme', themeId);
+    document.documentElement.setAttribute('data-theme', themeId);
+    window.dispatchEvent(new Event('storage'));
+    toast.success(`Theme loaded across ecosystem!`);
+  };
 
   const triggerDiscordLink = () => {
     if (discordLinked) return;
@@ -2780,247 +2934,612 @@ function AccountProfileModule({ favorites, setAccountOpen, setActiveSection, set
     }, 1500);
   };
 
+  // Activity calculation
+  const myPosts = (() => {
+    try {
+      const posts = JSON.parse(localStorage.getItem('mfs_feed_posts') || '[]');
+      return posts.filter(p => p.authorId === currentUser?.id);
+    } catch (_) {
+      return [];
+    }
+  })();
+
+  const myComments = (() => {
+    try {
+      const allShowcasePosts = JSON.parse(localStorage.getItem('mfs_allstar_hub_posts') || '[]');
+      const list = [];
+      allShowcasePosts.forEach(post => {
+        if (post.comments) {
+          post.comments.forEach(c => {
+            if (c.authorId === currentUser?.id || c.author === 'You (Member)' || c.author === currentUser?.name || c.author === currentUser?.displayName) {
+              list.push({
+                postId: post.id,
+                postCaption: post.caption,
+                postMedia: post.mediaUrl,
+                commentText: c.text,
+                timestamp: c.timestamp || new Date().toISOString()
+              });
+            }
+          });
+        }
+      });
+      return list;
+    } catch (_) {
+      return [];
+    }
+  })();
+
+  // Download key
+  const downloadBackupKey = () => {
+    const element = document.createElement("a");
+    const file = new Blob([
+      `=====================================================\n`,
+      `MAXX FORGE STUDIO™ — SECURITY BACKUP RECOVERY KEY\n`,
+      `=====================================================\n`,
+      `Email: ${currentUser.email}\n`,
+      `Display Name: ${currentUser.displayName}\n`,
+      `Date Backup: ${new Date().toLocaleDateString()}\n\n`,
+      `Your 12-word mnemonic recovery phrase:\n`,
+      `-----------------------------------------------------\n`,
+      `${currentUser.recoveryKey || 'No recovery key set'}\n`,
+      `-----------------------------------------------------\n\n`,
+      `WARNING: Keep this key safe. Do not share it with anyone.\n`,
+      `Use it to reset your passcode at login.\n`,
+      `=====================================================\n`
+    ], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `maxx-forge-backup-key-${currentUser.name.toLowerCase().replace(/\s+/g, '-')}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    toast.success('Backup file saved successfully!');
+  };
+
   const getBannerStyle = () => {
     if (equippedBanner === 'eternal_sunshine') {
       return {
         background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.25) 0%, rgba(139, 92, 246, 0.25) 50%, rgba(6, 182, 212, 0.25) 100%)',
-        border: '1px solid rgba(192, 132, 252, 0.4)',
-        boxShadow: '0 0 15px rgba(192, 132, 252, 0.2)'
+        border: `1.5px solid ${profileAccent}`,
+        boxShadow: `0 0 15px ${profileAccent}40`
       };
     }
-    return { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.05)' };
+    return { background: 'rgba(255,255,255,0.05)', border: `1px solid ${profileAccent}30` };
   };
 
   if (!currentUser) return null;
 
+  const ACCENTS = [
+    { value: '#10B981', label: 'Emerald' },
+    { value: '#00E5FF', label: 'Cyan' },
+    { value: '#EC4899', label: 'Pink' },
+    { value: '#EF4444', label: 'Red' },
+    { value: '#A855F7', label: 'Purple' },
+    { value: '#FBBF24', label: 'Gold' }
+  ];
+
+  const PROFILE_THEMES = [
+    { id: 'obsidian', label: 'Obsidian' },
+    { id: 'forge-red', label: 'Forge Red' },
+    { id: 'deep-navy', label: 'Navy' },
+    { id: 'chrome', label: 'Chrome' },
+    { id: 'liquid-glass', label: 'Glass' }
+  ];
+
   return (
-    <div className="flex flex-col gap-6 text-left">
-      {/* Profile Header Card */}
-      <div className="flex items-center gap-4 p-4 rounded-2xl transition duration-500 relative overflow-hidden" style={getBannerStyle()}>
-        
-        {/* Animated ambient shine for banner */}
+    <div className="flex flex-col gap-5 text-left font-sans">
+      {/* Dynamic Profile Header Card */}
+      <div className="flex items-center gap-4 p-5 rounded-3xl transition-all duration-500 relative overflow-hidden" style={getBannerStyle()}>
         {equippedBanner === 'eternal_sunshine' && (
           <div className="absolute inset-0 bg-scanlines opacity-10 pointer-events-none animate-pulse" />
         )}
-
         <div className="relative w-16 h-16 flex-shrink-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-pink-500 to-indigo-500 rounded-full animate-pulse-slow" />
-          <div className="relative w-full h-full bg-neutral-950 rounded-full border border-white/20 flex items-center justify-center font-display font-extrabold text-lg text-pink-400 shadow-inner">
+          <div className="absolute inset-0 rounded-2xl animate-pulse-slow opacity-60" style={{ background: `linear-gradient(135deg, ${profileAccent}, #a855f7)` }} />
+          <div className="relative w-full h-full bg-neutral-950 rounded-2xl border border-white/10 flex items-center justify-center font-display font-black text-xl shadow-inner" style={{ color: profileAccent }}>
             {currentUser.avatar}
           </div>
-          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-pink-500 border-2 border-obsidian-surface shadow-[0_0_5px_#EC4899]" title="Node status active"></span>
+          <span className="absolute bottom-[-2px] right-[-2px] w-4.5 h-4.5 rounded-full border-2 border-neutral-950 flex items-center justify-center bg-emerald-500" title="Active Core Node">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+          </span>
         </div>
 
-        <div className="flex-grow">
-          <h3 className="text-base font-display font-bold text-paper-white">{currentUser.name}</h3>
-          <span className="text-[10px] font-mono text-paper-white-muted uppercase truncate block max-w-[200px]">{currentUser.email}</span>
+        <div className="flex-grow min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-base font-display font-extrabold text-white truncate">{currentUser.displayName || currentUser.name}</h3>
+            {currentUser.role === 'founder' && <span className="text-[8px] font-mono font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/35 px-1.5 py-0.2 rounded uppercase">Founder</span>}
+          </div>
+          <span className="text-[10px] font-mono text-white/40 truncate block mt-0.5">{currentUser.email}</span>
           
-          <div className="flex items-center gap-1.5 mt-2 bg-pink-500/10 border border-pink-500/20 rounded px-2 py-0.5 w-max">
-            <Sparkles size={10} className="text-pink-400" />
-            <span className="text-[8px] font-mono text-pink-400 font-bold uppercase tracking-wider">
-              {isBadgeUnlocked ? '☀️ ETERNAL SUNSHINE' : currentUser.badge}
-            </span>
+          <div className="flex items-center gap-1 mt-2.5 px-2 py-0.5 rounded border text-[8px] font-mono font-bold w-max" style={{ borderColor: `${profileAccent}40`, color: profileAccent, background: `${profileAccent}10` }}>
+            <Sparkles size={8} />
+            <span>{isBadgeUnlocked ? '☀️ ETERNAL SUNSHINE' : currentUser.badge}</span>
           </div>
         </div>
       </div>
 
-      {/* Banner Equip customization */}
-      {isBannerUnlocked && (
-        <div className="bg-white/3 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 font-mono text-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] text-white/40 uppercase">Profile Banners ({equippedBanner === 'eternal_sunshine' ? '1 Equipped' : '0 Equipped'})</span>
-          </div>
-          <div className="flex gap-2">
+      {/* Tab Row Navigation */}
+      <div className="flex gap-1 border-b border-white/5 pb-2 overflow-x-auto flex-shrink-0">
+        {[
+          { id: 'customize', label: 'Media Hub', icon: Sliders },
+          { id: 'activity', label: 'Activity Hub', icon: MessageSquare },
+          { id: 'sync', label: 'Sync Library', icon: Disc },
+          { id: 'quests', label: 'Achievements', icon: Sparkles },
+          { id: 'security', label: 'Security & Backup', icon: Shield }
+        ].map(t => {
+          const Icon = t.icon;
+          const isSelected = profileTab === t.id;
+          return (
             <button
-              onClick={() => {
-                localStorage.setItem('mfs_equipped_banner', equippedBanner === 'eternal_sunshine' ? 'default' : 'eternal_sunshine');
-                toast.success(equippedBanner === 'eternal_sunshine' ? 'Banner unequipped' : 'Eternal Sunshine Sky Banner equipped!');
-                window.dispatchEvent(new Event('storage'));
+              key={t.id}
+              onClick={() => setProfileTab(t.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-mono font-bold whitespace-nowrap transition cursor-pointer"
+              style={{
+                background: isSelected ? `${profileAccent}15` : 'transparent',
+                border: isSelected ? `1px solid ${profileAccent}30` : '1px solid transparent',
+                color: isSelected ? '#fff' : 'rgba(255,255,255,0.4)'
               }}
-              className={`flex-grow py-2 px-3 text-[10px] font-bold rounded-xl border transition ${
-                equippedBanner === 'eternal_sunshine'
-                  ? 'bg-pink-500/10 border-pink-500/30 text-pink-400'
-                  : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
-              }`}
             >
-              {equippedBanner === 'eternal_sunshine' ? 'UNEQUIP SUNSHINE SKY' : 'EQUIP ETERNAL SUNSHINE SKY'}
+              <Icon size={11} style={{ color: isSelected ? profileAccent : 'inherit' }} />
+              {t.label}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Lobby Achievement Quest Path ("Walker") */}
-      <div className="flex flex-col gap-3 bg-neutral-950/60 p-5 rounded-2xl border border-white/5 font-mono text-xs">
-        <div className="flex items-center justify-between border-b border-white/5 pb-2">
-          <span className="text-[10px] text-paper-white-dim uppercase font-bold tracking-wider">Lobby Quest Walker</span>
-          <span className="text-[9px] text-cyan-400 font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded">Spotlight Event</span>
-        </div>
-
-        <div className="flex flex-col gap-4 mt-2">
-          {/* Milestone 1 */}
-          <div className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
-                listenedTracks.length >= 1 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
-              }`}>
-                {listenedTracks.length >= 1 ? '✓' : '1'}
-              </div>
-              <div className={`w-0.5 h-6 bg-white/5 ${listenedTracks.length >= 1 ? 'bg-cyan-400/20' : ''}`} />
-            </div>
-            <div className="flex-grow text-left">
-              <p className="text-xs font-bold text-white leading-tight">First Audition</p>
-              <p className="text-[9px] text-white/30 mt-0.5">Unlocks "Saturn Returns" track in lobby catalog.</p>
-              <span className="text-[9px] text-cyan-400 font-bold block mt-1">
-                {listenedTracks.length >= 1 ? 'UNLOCKED' : 'LOCKED'}
-              </span>
-            </div>
-          </div>
-
-          {/* Milestone 2 */}
-          <div className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
-                listenedTracks.length >= 5 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
-              }`}>
-                {listenedTracks.length >= 5 ? '✓' : '2'}
-              </div>
-              <div className={`w-0.5 h-6 bg-white/5 ${listenedTracks.length >= 5 ? 'bg-cyan-400/20' : ''}`} />
-            </div>
-            <div className="flex-grow text-left">
-              <p className="text-xs font-bold text-white leading-tight">Enthusiast Sync</p>
-              <p className="text-[9px] text-white/30 mt-0.5">Unlocks Profile Banner customizable overlay.</p>
-              <span className="text-[9px] text-cyan-400 font-bold block mt-1">
-                {listenedTracks.length >= 5 ? 'UNLOCKED' : `PROGRESS: ${Math.min(5, listenedTracks.length)}/5`}
-              </span>
-            </div>
-          </div>
-
-          {/* Milestone 3 */}
-          <div className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
-                listenedTracks.length >= 19 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
-              }`}>
-                {listenedTracks.length >= 19 ? '✓' : '3'}
-              </div>
-            </div>
-            <div className="flex-grow text-left">
-              <p className="text-xs font-bold text-white leading-tight">Album Loop Completion</p>
-              <p className="text-[9px] text-white/30 mt-0.5">Unlocks Legendary Badge tied to your account profile.</p>
-              <span className="text-[9px] text-cyan-400 font-bold block mt-1">
-                {listenedTracks.length >= 19 ? 'UNLOCKED' : `PROGRESS: ${listenedTracks.length}/19`}
-              </span>
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      {/* User Stats / Telemetry */}
-      <div className="flex flex-col gap-3 bg-neutral-950/60 p-4 rounded-2xl border border-white/5 font-mono text-xs">
-        <span className="text-[10px] text-paper-white-dim uppercase font-bold tracking-wider">Ecosystem Telemetry</span>
+      {/* Profile Content Router */}
+      <div className="flex-1 min-h-[320px]">
         
-        <div className="flex justify-between items-center py-1">
-          <span className="text-paper-white-muted">Node XP Points</span>
-          <span className="text-paper-white font-bold">12,450 XP</span>
-        </div>
-        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-moss-green rounded-full" style={{ width: '65%' }}></div>
-        </div>
-
-        <div className="flex justify-between items-center py-1 border-t border-white/5 mt-2">
-          <span className="text-paper-white-muted">Connected Nodes</span>
-          <span className="text-cyber-blue font-bold">04 / 04</span>
-        </div>
-      </div>
-
-      {/* Discord Sync Button */}
-      <div className="glass-panel rounded-2xl p-4 border border-indigo-500/20 bg-indigo-950/5 flex flex-col gap-3">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider">Discord Integration</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-        </div>
-        
-        {discordLinked ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/30 p-2.5 rounded-xl text-xs text-indigo-200">
-              <Check size={14} className="text-indigo-400" />
-              <span>Synced as <strong>ForgeWeaver#9010</strong></span>
+        {/* TAB 1: MEDIA HUB & CUSTOMIZE */}
+        {profileTab === 'customize' && (
+          <div className="flex flex-col gap-4 animate-fade-in text-left">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white/50 border-b border-white/5 pb-1">Media Hub Settings</h4>
+            
+            {/* Accent Color Picker */}
+            <div className="flex flex-col gap-2 bg-white/2 border border-white/5 p-4 rounded-2xl">
+              <span className="text-[10px] font-mono text-white/40 uppercase">Ecosystem Profile Accent</span>
+              <div className="flex gap-3 mt-1.5 flex-wrap">
+                {ACCENTS.map(acc => (
+                  <button
+                    key={acc.value}
+                    onClick={() => handleAccentChange(acc.value)}
+                    className="w-7 h-7 rounded-lg border-2 relative flex items-center justify-center transition hover:scale-110 cursor-pointer"
+                    style={{
+                      background: acc.value,
+                      borderColor: profileAccent === acc.value ? '#fff' : 'transparent',
+                      boxShadow: profileAccent === acc.value ? `0 0 10px ${acc.value}` : 'none'
+                    }}
+                    title={acc.label}
+                  >
+                    {profileAccent === acc.value && <Check size={12} className="text-white" />}
+                  </button>
+                ))}
+              </div>
             </div>
-            <button 
-              onClick={() => setDiscordLinked(false)}
-              className="text-[10px] font-mono text-indigo-400/60 hover:text-indigo-400 text-left underline"
-            >
-              Disconnect synchronization
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={triggerDiscordLink}
-            disabled={syncing}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition duration-300 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(99,102,241,0.2)] disabled:opacity-50"
-            id="btn-discord-sync"
-          >
-            {syncing ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <Laptop size={13} />
-                <span>Link Discord Account</span>
-              </>
-            )}
-          </button>
-        )}
-      </div>
 
-      {/* Saved Tracks favorites checklist */}
-      <div className="flex flex-col gap-3">
-        <span className="text-[10px] font-mono text-paper-white-dim uppercase font-bold tracking-wider">
-          Saved Music Nodes ({favorites.length})
-        </span>
+            {/* Local Theme Selector */}
+            <div className="flex flex-col gap-2 bg-white/2 border border-white/5 p-4 rounded-2xl">
+              <span className="text-[10px] font-mono text-white/40 uppercase">Ecosystem Visual Theme</span>
+              <div className="grid grid-cols-3 gap-2 mt-1.5">
+                {PROFILE_THEMES.map(theme => {
+                  const currentTheme = localStorage.getItem('mfs_theme') || 'obsidian';
+                  const active = currentTheme === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => handleProfileThemeChange(theme.id)}
+                      className="py-2 rounded-xl text-[10px] font-mono font-bold border transition text-center cursor-pointer"
+                      style={{
+                        background: active ? `${profileAccent}15` : 'rgba(255,255,255,0.03)',
+                        borderColor: active ? profileAccent : 'rgba(255,255,255,0.06)',
+                        color: active ? '#fff' : 'rgba(255,255,255,0.5)'
+                      }}
+                    >
+                      {theme.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {favorites.length === 0 ? (
-          <div className="text-center py-6 border border-dashed border-white/10 rounded-xl text-xs text-paper-white-dim">
-            No items in session cache. Heart tracks in Prime Records to sync.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {favorites.map(id => {
-              const track = PLAYLIST.find(t => t.id === id);
-              if (!track) return null;
-              const trackIndex = PLAYLIST.indexOf(track);
-              return (
+            {/* Featured Track Media Node */}
+            <div className="flex flex-col gap-2 bg-white/2 border border-white/5 p-4 rounded-2xl relative overflow-hidden">
+              <span className="text-[10px] font-mono text-white/40 uppercase">Featured Track Media Node</span>
+              
+              <div className="flex gap-3 items-center mt-2">
+                {/* Vinyl Spin Visual */}
                 <div 
-                  key={id}
-                  onClick={() => {
-                    setAccountOpen(false);
-                    setActiveSection('records');
-                    setCurrentTrackIndex(trackIndex);
-                    setIsPlaying(true);
-                  }}
-                  className="group flex items-center justify-between p-3 bg-neutral-950/60 border border-white/5 hover:border-cyber-blue rounded-xl cursor-pointer transition duration-300"
+                  className={`w-14 h-14 rounded-full border border-white/10 flex-shrink-0 flex items-center justify-center bg-neutral-900 relative shadow-lg ${profilePlaying ? 'animate-spin' : ''}`}
+                  style={{ animationDuration: '6s' }}
                 >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <Disc size={14} className="text-cyber-blue group-hover:animate-spin" style={{ animationDuration: '3s' }} />
-                    <div className="truncate">
-                      <p className="text-xs font-semibold truncate leading-tight text-paper-white">{track.title}</p>
-                      <span className="text-[8px] font-mono text-paper-white-dim">{track.artist}</span>
+                  <Disc size={20} className="text-white/60" />
+                  <div className="absolute w-3 h-3 rounded-full bg-[#050508] border border-white/10" />
+                </div>
+
+                <div className="flex-grow min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{featuredTrack?.title || 'Unknown Track'}</p>
+                  <span className="text-[9px] font-mono text-white/45 truncate block mt-0.5">{featuredTrack?.artist || 'Unknown Artist'}</span>
+                  
+                  {/* Select dropdown */}
+                  <select
+                    value={currentUser.featuredTrackId || 1}
+                    onChange={(e) => handleTrackSelectChange(e.target.value)}
+                    className="mt-2 w-full max-w-[160px] bg-neutral-900 border border-white/10 rounded-lg text-[9px] font-mono font-bold p-1 text-white/80 focus:outline-none focus:border-white/20"
+                  >
+                    {PLAYLIST.map(track => (
+                      <option key={track.id} value={track.id}>{track.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Local Audio Element */}
+                <audio
+                  ref={profileAudioRef}
+                  src={featuredTrack?.src}
+                  onTimeUpdate={handleAudioTimeUpdate}
+                  onEnded={() => setProfilePlaying(false)}
+                />
+
+                {/* Play/Pause trigger */}
+                <button
+                  onClick={toggleProfilePlayback}
+                  className="p-3.5 rounded-2xl flex items-center justify-center transition border cursor-pointer hover:scale-105"
+                  style={{
+                    background: `${profileAccent}15`,
+                    borderColor: `${profileAccent}30`,
+                    color: profileAccent
+                  }}
+                >
+                  {profilePlaying ? <Pause size={14} fill={profileAccent} /> : <Play size={14} fill={profileAccent} />}
+                </button>
+              </div>
+
+              {/* Media Progress bar */}
+              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-3 relative">
+                <div 
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${profileProgress}%`, background: profileAccent }}
+                />
+              </div>
+            </div>
+
+            {/* Profile Banners */}
+            {isBannerUnlocked && (
+              <div className="bg-white/2 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 font-mono text-xs">
+                <span className="text-[10px] text-white/40 uppercase">Sky Banner customizations ({equippedBanner === 'eternal_sunshine' ? '1 Equipped' : '0 Equipped'})</span>
+                <button
+                  onClick={() => {
+                    const next = equippedBanner === 'eternal_sunshine' ? 'default' : 'eternal_sunshine';
+                    updateUserProfile({ profileBanner: next });
+                    toast.success(equippedBanner === 'eternal_sunshine' ? 'Banner unequipped' : 'Eternal Sunshine Sky Banner equipped!');
+                  }}
+                  className="py-2.5 px-3 text-[10px] font-bold rounded-xl border transition cursor-pointer uppercase text-center"
+                  style={{
+                    background: equippedBanner === 'eternal_sunshine' ? `${profileAccent}15` : 'rgba(255,255,255,0.03)',
+                    borderColor: equippedBanner === 'eternal_sunshine' ? profileAccent : 'rgba(255,255,255,0.08)',
+                    color: equippedBanner === 'eternal_sunshine' ? '#fff' : 'rgba(255,255,255,0.5)'
+                  }}
+                >
+                  {equippedBanner === 'eternal_sunshine' ? 'Unequip Sunshine Banner' : 'Equip Eternal Sunshine Banner'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: MY ACTIVITY HUB */}
+        {profileTab === 'activity' && (
+          <div className="flex flex-col gap-4 animate-fade-in text-left">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white/50 border-b border-white/5 pb-1">Activity Log</h4>
+            
+            {/* Feed Posts */}
+            <div className="flex flex-col gap-2.5">
+              <span className="text-[10px] font-mono text-white/40 uppercase">My Feed Publications ({myPosts.length})</span>
+              {myPosts.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl text-[10px] font-mono text-white/25">
+                  No post records. Visit The Forge Feed to start publishing.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
+                  {myPosts.map(post => (
+                    <div key={post.id} className="p-3 bg-white/2 border border-white/5 rounded-2xl">
+                      <div className="flex items-center justify-between text-[8px] font-mono text-white/30">
+                        <span className="flex items-center gap-1"><Hash size={8} /> channel-post</span>
+                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-[10px] text-white/70 leading-relaxed mt-1">{post.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Showcase Comments */}
+            <div className="flex flex-col gap-2.5 mt-2">
+              <span className="text-[10px] font-mono text-white/40 uppercase">My Showcase Feed Comments ({myComments.length})</span>
+              {myComments.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl text-[10px] font-mono text-white/25">
+                  No comment records. Post comments on media drops in All-Star Hub.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-[165px] overflow-y-auto pr-1">
+                  {myComments.map((c, idx) => (
+                    <div key={idx} className="p-3 bg-white/2 border border-white/5 rounded-2xl flex flex-col gap-1.5">
+                      <div className="flex justify-between items-center text-[8px] font-mono text-white/30">
+                        <span className="truncate max-w-[150px]">On: "{c.postCaption}"</span>
+                        <span>{new Date(c.timestamp).toLocaleDateString()}</span>
+                      </div>
+                      <div className="p-2 bg-neutral-900/60 rounded-xl border border-white/5 text-[10px]" style={{ borderLeft: `2.5px solid ${profileAccent}` }}>
+                        "{c.commentText}"
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: SYNC LIBRARY */}
+        {profileTab === 'sync' && (
+          <div className="flex flex-col gap-4 animate-fade-in text-left">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white/50 border-b border-white/5 pb-1">Sync Connections</h4>
+
+            {/* Discord Sync Button */}
+            <div className="glass-panel rounded-2xl p-4 border border-indigo-500/20 bg-indigo-950/5 flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider">Discord Integration</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping"></span>
+              </div>
+              
+              {discordLinked ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/30 p-2.5 rounded-xl text-xs text-indigo-200">
+                    <Check size={14} className="text-indigo-400" />
+                    <span className="font-mono text-[10px]">Synced: <strong>ForgeWeaver#9010</strong></span>
+                  </div>
+                  <button 
+                    onClick={() => setDiscordLinked(false)}
+                    className="text-[9px] font-mono text-indigo-400/60 hover:text-indigo-400 text-left underline cursor-pointer"
+                  >
+                    Disconnect synchronization
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={triggerDiscordLink}
+                  disabled={syncing}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition duration-300 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(99,102,241,0.2)] disabled:opacity-50 cursor-pointer"
+                  id="btn-discord-sync"
+                >
+                  {syncing ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Laptop size={13} />
+                      <span>Link Discord Account</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Saved Music Nodes */}
+            <div className="flex flex-col gap-3">
+              <span className="text-[10px] font-mono text-white/40 uppercase">
+                Saved Music Nodes ({favorites.length})
+              </span>
+
+              {favorites.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl text-[10px] font-mono text-white/25">
+                  No saved music files. Heart tracks in All-Star Hub to sync.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
+                  {favorites.map(id => {
+                    const track = PLAYLIST.find(t => t.id === id);
+                    if (!track) return null;
+                    const trackIndex = PLAYLIST.indexOf(track);
+                    return (
+                      <div 
+                        key={id}
+                        onClick={() => {
+                          setAccountOpen(false);
+                          setActiveSection('records');
+                          setCurrentTrackIndex(trackIndex);
+                          setIsPlaying(true);
+                        }}
+                        className="group flex items-center justify-between p-3 bg-neutral-950/60 border border-white/5 hover:border-cyan-500/30 rounded-xl cursor-pointer transition duration-300"
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Disc size={14} className="text-cyan-400 group-hover:animate-spin" style={{ animationDuration: '3s' }} />
+                          <div className="truncate">
+                            <p className="text-xs font-semibold truncate leading-tight text-white">{track.title}</p>
+                            <span className="text-[8px] font-mono text-white/40">{track.artist}</span>
+                          </div>
+                        </div>
+                        <ChevronRight size={14} className="text-white/30 group-hover:text-cyan-400 transition" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: ACHIEVEMENTS & QUESTS */}
+        {profileTab === 'quests' && (
+          <div className="flex flex-col gap-4 animate-fade-in text-left">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white/50 border-b border-white/5 pb-1">Telemetry & Quests</h4>
+
+            {/* Lobby Achievement Quest Path */}
+            <div className="flex flex-col gap-3 bg-neutral-950/60 p-4.5 rounded-2xl border border-white/5 font-mono text-xs">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">Lobby Quest Walker</span>
+                <span className="text-[9px] text-cyan-400 font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded">Spotlight</span>
+              </div>
+
+              <div className="flex flex-col gap-3.5 mt-2">
+                {/* Milestone 1 */}
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
+                      listenedTracks.length >= 1 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
+                    }`}>
+                      {listenedTracks.length >= 1 ? '✓' : '1'}
+                    </div>
+                    <div className={`w-0.5 h-5 bg-white/5 ${listenedTracks.length >= 1 ? 'bg-cyan-400/20' : ''}`} />
+                  </div>
+                  <div className="flex-grow">
+                    <p className="text-xs font-bold text-white leading-tight">First Audition</p>
+                    <p className="text-[9px] text-white/30 mt-0.5">Unlocks "Saturn Returns" track in lobby.</p>
+                  </div>
+                </div>
+
+                {/* Milestone 2 */}
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
+                      listenedTracks.length >= 5 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
+                    }`}>
+                      {listenedTracks.length >= 5 ? '✓' : '2'}
+                    </div>
+                    <div className={`w-0.5 h-5 bg-white/5 ${listenedTracks.length >= 5 ? 'bg-cyan-400/20' : ''}`} />
+                  </div>
+                  <div className="flex-grow">
+                    <p className="text-xs font-bold text-white leading-tight">Enthusiast Sync</p>
+                    <p className="text-[9px] text-white/30 mt-0.5">Unlocks customizable profile banners.</p>
+                  </div>
+                </div>
+
+                {/* Milestone 3 */}
+                <div className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] font-bold ${
+                      listenedTracks.length >= 19 ? 'bg-cyan-500/10 border-cyan-400 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'
+                    }`}>
+                      {listenedTracks.length >= 19 ? '✓' : '3'}
                     </div>
                   </div>
-                  <ChevronRight size={14} className="text-paper-white-dim group-hover:text-cyber-blue transition" />
+                  <div className="flex-grow">
+                    <p className="text-xs font-bold text-white leading-tight">Album Loop Completion</p>
+                    <p className="text-[9px] text-white/30 mt-0.5">Unlocks Legendary Badge in chest.</p>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* Ecosystem Telemetry */}
+            <div className="flex flex-col gap-3 bg-neutral-950/60 p-4 rounded-2xl border border-white/5 font-mono text-xs">
+              <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">Ecosystem Telemetry</span>
+              
+              <div className="flex justify-between items-center py-1">
+                <span className="text-white/40">Node XP Points</span>
+                <span className="text-white font-bold">12,450 XP</span>
+              </div>
+              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: '65%', background: profileAccent }}></div>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-t border-white/5 mt-2">
+                <span className="text-white/40">Connected Nodes</span>
+                <span className="text-cyber-blue font-bold">04 / 04</span>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* TAB 5: SECURITY & BACKUP */}
+        {profileTab === 'security' && (
+          <div className="flex flex-col gap-4 animate-fade-in text-left">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white/50 border-b border-white/5 pb-1">Security & Recovery Keys</h4>
+
+            <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px' }}>
+              <span style={{ fontSize: '10px', color: '#f87171', fontFamily: 'monospace', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Shield size={12} /> Backup Mnemonic Phrase
+              </span>
+              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                Your recovery key allows resetting your passcode dynamically. Never disclose this phrase to anybody, including studio staff.
+              </p>
+            </div>
+
+            {/* Revealed Key Display */}
+            <div className="bg-white/2 border border-white/5 p-4 rounded-2xl flex flex-col gap-3">
+              {revealKey ? (
+                <>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '6px',
+                    background: 'rgba(0,0,0,0.3)',
+                    padding: '10px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255,255,255,0.06)'
+                  }}>
+                    {(currentUser.recoveryKey || 'maxx forge founder secret key 2026').split(' ').map((word, idx) => (
+                      <div key={idx} style={{
+                        padding: '6px 4px',
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px solid rgba(255,255,255,0.04)',
+                        borderRadius: '5px',
+                        fontSize: '9px',
+                        fontFamily: 'monospace',
+                        color: '#e0e0e0',
+                        textAlign: 'center',
+                        position: 'relative'
+                      }}>
+                        <span style={{ fontSize: '7px', color: 'rgba(255,255,255,0.2)', position: 'absolute', top: '1px', left: '3px' }}>{idx + 1}</span>
+                        {word}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={downloadBackupKey}
+                      className="flex-grow py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-mono font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Download size={11} /> DOWNLOAD KEY FILE
+                    </button>
+                    <button
+                      onClick={() => setRevealKey(false)}
+                      className="py-2 px-3 bg-white/5 hover:bg-white/10 text-white/60 rounded-xl text-[10px] font-mono font-bold transition cursor-pointer"
+                    >
+                      HIDE
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => setRevealKey(true)}
+                  className="w-full py-3 bg-white/5 hover:bg-white/10 text-white/80 border border-white/8 rounded-xl text-[10px] font-mono font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Eye size={12} /> REVEAL ACCOUNT RECOVERY KEY
+                </button>
+              )}
+            </div>
+
+            {/* Login Credentials Reference Card */}
+            <div className="p-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 text-left font-mono text-[9px] leading-relaxed text-yellow-500/80">
+              <span className="font-bold text-yellow-400 block mb-1 uppercase tracking-wider">Account Credentials Check:</span>
+              Node Identity: {currentUser.id}<br/>
+              Node Clearance: {currentUser.role.toUpperCase()}<br/>
+              Access Node Key: SHA-256 Verified Enclave Lock
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Logout Action */}
       <button
         onClick={() => {
+          if (profileAudioRef.current) {
+            profileAudioRef.current.pause();
+          }
           logout();
           navigate('/login');
         }}
-        className="w-full py-3 mt-4 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2"
+        className="w-full py-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center gap-2 cursor-pointer"
       >
         <span>[ LOGOUT FROM MATRIX ]</span>
       </button>

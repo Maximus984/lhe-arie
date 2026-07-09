@@ -3,7 +3,51 @@
 // Manages automated pre-scheduled update and maintenance cycles
 // =====================================================
 
+// Change Log: cleanup for bugs summer - Registered summer bug cleanup patch.
 export const SCHEDULED_RELEASES = [
+  {
+    version: 'v4.0.3-Patch',
+    title: 'Staff Portal Enhancements & Telemetry Recovery',
+    type: 'Patch',
+    scheduledTime: '2026-07-09T04:55:00.000Z',
+    maintenanceLeadMinutes: 0,
+    status: 'live',
+    changes: [
+      'Fix runtime render exception caused by undefined PlusCircle icon on Dashboard',
+      'Deploy full Account Management tab in Staff Portal with email modification and account unlock features',
+      'Implement one-time recovery key generator for staff to assist members with locked accounts',
+      'Add daily check-in checklist panel with streak tracking and shift diagnostic report submission',
+      'Implement floating Staff Access bypass button on Maintenance mode page',
+      'Add collapsible help banner with live status tickers and self-help guide on Login page'
+    ]
+  },
+  {
+    version: 'v4.0.2-Patch',
+    title: 'Aries OS Recovery & Interactive Transition Suite',
+    type: 'Patch',
+    scheduledTime: '2026-07-09T01:38:00.000Z',
+    maintenanceLeadMinutes: 0,
+    status: 'live',
+    changes: [
+      'Fix missing close icon reference in biometric authentication simulator modal on Login page',
+      'Deploy global route change loading animations with smooth progress tracking',
+      'Integrate interactive Forge Clicker mini-game and background music stream during slow loads',
+      'Implement site-wide wabi-sabi style Ecosystem Error Boundary to resolve black screens',
+      'Enable automated telemetry reporting of UI crashes directly to the Admin Dashboard proposals registry'
+    ]
+  },
+  {
+    version: 'v4.0.1-Patch',
+    title: 'cleanup for bugs summer',
+    type: 'Patch',
+    scheduledTime: '2026-07-07T22:54:00.000Z',
+    maintenanceLeadMinutes: 0,
+    status: 'live',
+    changes: [
+      'Fix React hooks crash inside HeroBrickPlane on Landing page scroll',
+      'Verify all routes and views across the Maxx Forge Studio site to ensure stability'
+    ]
+  },
   {
     version: 'v4.1.0-Delta',
     title: 'Aries Cloud Integration & Google Calendar Sync',
@@ -90,6 +134,16 @@ export function initializeReleases() {
   const existing = localStorage.getItem('mfs_scheduled_releases');
   if (!existing) {
     localStorage.setItem('mfs_scheduled_releases', JSON.stringify(SCHEDULED_RELEASES));
+  } else {
+    try {
+      const parsed = JSON.parse(existing);
+      const missing = SCHEDULED_RELEASES.filter(sr => !parsed.some(p => p.version === sr.version));
+      if (missing.length > 0) {
+        localStorage.setItem('mfs_scheduled_releases', JSON.stringify([...missing, ...parsed]));
+      }
+    } catch (_) {
+      localStorage.setItem('mfs_scheduled_releases', JSON.stringify(SCHEDULED_RELEASES));
+    }
   }
 }
 

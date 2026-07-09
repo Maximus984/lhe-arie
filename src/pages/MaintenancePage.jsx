@@ -1,5 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { ShieldCheck } from 'lucide-react';
 
 // =====================================================
 // MAXX FORGE STUDIO™ — Maintenance Mode Page
@@ -7,6 +9,7 @@ import { motion } from 'framer-motion';
 // =====================================================
 
 export default function MaintenancePage({ message }) {
+  const navigate = useNavigate();
   return (
     <div style={styles.page}>
       {/* Noise texture */}
@@ -18,6 +21,19 @@ export default function MaintenancePage({ message }) {
         transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
         style={styles.glow}
       />
+
+      {/* Staff bypass floating badge */}
+      <motion.button
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.2, duration: 0.6 }}
+        onClick={() => navigate('/login')}
+        style={styles.bypassBtn}
+        title="Staff/Founder access — bypass maintenance"
+      >
+        <ShieldCheck size={13} style={{ flexShrink: 0 }} />
+        <span>Staff Access</span>
+      </motion.button>
 
       {/* Content */}
       <motion.div
@@ -191,5 +207,14 @@ const styles = {
   footer: {
     fontSize: '11px', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic',
     marginTop: '16px', margin: 0,
+  },
+  bypassBtn: {
+    position: 'absolute', top: '16px', right: '20px', zIndex: 10,
+    display: 'flex', alignItems: 'center', gap: '6px',
+    padding: '7px 14px', borderRadius: '20px', border: '1px solid rgba(99,102,241,0.35)',
+    background: 'rgba(99,102,241,0.08)', backdropFilter: 'blur(12px)',
+    color: 'rgba(165,180,252,0.8)', fontSize: '10px', fontWeight: '700',
+    letterSpacing: '0.1em', fontFamily: 'monospace', cursor: 'pointer',
+    transition: 'all 0.2s',
   },
 };

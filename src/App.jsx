@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { Toaster } from 'react-hot-toast';
 import Landing from './pages/Landing.jsx';
@@ -16,7 +16,11 @@ import PermissionsModal from './components/PermissionsModal.jsx';
 import SeasonalEffects from './components/SeasonalEffects.jsx';
 import ForgeChest from './components/ForgeChest.jsx';
 import SocialsDock from './components/SocialsDock.jsx';
+import SparkleCursor from './components/SparkleCursor.jsx';
 import { isMaintenanceMode, getMaintenanceMessage } from './data/analytics.js';
+import EcosystemErrorBoundary from './components/EcosystemErrorBoundary.jsx';
+import PageTransitionLoader from './components/PageTransitionLoader.jsx';
+import { AnimatePresence } from 'framer-motion';
 
 function ProtectedRoute({ children, requiredPermission }) {
   const { currentUser, isLoading, can } = useAuth();
@@ -50,35 +54,67 @@ function MaintenanceGate({ children }) {
   return children;
 }
 
+function RouteTransitionGate({ children }) {
+  const location = useLocation();
+  const [loading, setLoading] = useState(false);
+  const [prevPath, setPrevPath] = useState(location.pathname);
+
+  useEffect(() => {
+    if (location.pathname !== prevPath) {
+      setLoading(true);
+      setPrevPath(location.pathname);
+    }
+  }, [location, prevPath]);
+
+  return (
+    <>
+      <AnimatePresence mode="wait">
+        {loading && (
+          <PageTransitionLoader 
+            key="page-loader" 
+            onComplete={() => setLoading(false)} 
+            duration={1800} 
+          />
+        )}
+      </AnimatePresence>
+      <div style={{ opacity: loading ? 0 : 1, transition: 'opacity 0.25s ease-in-out' }}>
+        {children}
+      </div>
+    </>
+  );
+}
+
 function AppRoutes() {
   const { currentUser } = useAuth();
   return (
-    <MaintenanceGate>
-      <Routes>
-        <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Landing />} />
-        <Route path="/max-ai" element={<MaxAiDemo />} />
-        <Route path="/login" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
-        <Route path="/dashboard" element={
-          <ProtectedRoute><Dashboard /></ProtectedRoute>
-        } />
-        <Route path="/workspace" element={
-          <ProtectedRoute requiredPermission="use_workspace"><Workspace /></ProtectedRoute>
-        } />
-        <Route path="/feed" element={
-          <ProtectedRoute><ForgeFeed /></ProtectedRoute>
-        } />
-        <Route path="/live" element={
-          <ProtectedRoute><LiveArena /></ProtectedRoute>
-        } />
-        <Route path="/admin" element={
-          <ProtectedRoute requiredPermission="view_admin"><AdminPanel /></ProtectedRoute>
-        } />
-        <Route path="/staff" element={
-          <ProtectedRoute requiredPermission="view_staff_portal"><StaffPortal /></ProtectedRoute>
-        } />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </MaintenanceGate>
+    <RouteTransitionGate>
+      <MaintenanceGate>
+        <Routes>
+          <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Landing />} />
+          <Route path="/max-ai" element={<MaxAiDemo />} />
+          <Route path="/login" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute><Dashboard /></ProtectedRoute>
+          } />
+          <Route path="/workspace" element={
+            <ProtectedRoute requiredPermission="use_workspace"><Workspace /></ProtectedRoute>
+          } />
+          <Route path="/feed" element={
+            <ProtectedRoute><ForgeFeed /></ProtectedRoute>
+          } />
+          <Route path="/live" element={
+            <ProtectedRoute><LiveArena /></ProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <ProtectedRoute requiredPermission="view_admin"><AdminPanel /></ProtectedRoute>
+          } />
+          <Route path="/staff" element={
+            <ProtectedRoute requiredPermission="view_staff_portal"><StaffPortal /></ProtectedRoute>
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </MaintenanceGate>
+    </RouteTransitionGate>
   );
 }
 
@@ -121,27 +157,30 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: 'rgba(13,13,18,0.95)',
-              color: '#F3F4F6',
-              border: '1px solid rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(20px)',
-              borderRadius: '12px',
-              fontSize: '13px',
-              fontFamily: 'Inter, sans-serif',
-            },
-            success: { iconTheme: { primary: '#10B981', secondary: '#050508' } },
-            error: { iconTheme: { primary: '#EF4444', secondary: '#050508' } },
-          }}
-        />
-        <PermissionsModal />
-        <SeasonalEffects />
-        <ForgeChest />
-        <SocialsDock />
-        <AppRoutes />
+        <EcosystemErrorBoundary>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: 'rgba(13,13,18,0.95)',
+                color: '#F3F4F6',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(20px)',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontFamily: 'Inter, sans-serif',
+              },
+              success: { iconTheme: { primary: '#10B981', secondary: '#050508' } },
+              error: { iconTheme: { primary: '#EF4444', secondary: '#050508' } },
+            }}
+          />
+          <PermissionsModal />
+          <SeasonalEffects />
+          <ForgeChest />
+          <SocialsDock />
+          <SparkleCursor />
+          <AppRoutes />
+        </EcosystemErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );
