@@ -2,8 +2,20 @@ import React, { useEffect, useRef } from 'react';
 
 export default function SparkleCursor() {
   const canvasRef = useRef(null);
+  const cursorRef = useRef(null);
 
   useEffect(() => {
+    // Hide default cursor across the entire page
+    const styleEl = document.createElement('style');
+    styleEl.id = 'custom-cursor-hide-default';
+    styleEl.innerHTML = `
+      *, *::before, *::after {
+        cursor: none !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    const cursor = cursorRef.current;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -43,13 +55,12 @@ export default function SparkleCursor() {
         this.alpha = 1;
         this.decay = Math.random() * 0.02 + 0.015;
 
-        // Color selection: Gold, Moss Green, Cyber Blue, Electric Purple, Hot Pink
+        // Color selection matching the metallic fire theme: Orange, Red, Cyber Blue, Gold
         const colors = [
+          '#EF4444', // Red
+          '#F59E0B', // Amber/Orange
           '#FBBF24', // Gold
-          '#10B981', // Moss Green
           '#00E5FF', // Cyber Blue
-          '#A855F7', // Electric Purple
-          '#EC4899', // Hot Pink
         ];
         this.color = colors[Math.floor(Math.random() * colors.length)];
       }
@@ -98,11 +109,17 @@ export default function SparkleCursor() {
       }
     }
 
-    // Spawns sparkles on mouse movement
+    // Spawns sparkles on mouse movement and updates custom cursor position
     const handleMouseMove = (e) => {
       const x = e.clientX;
       const y = e.clientY;
       
+      // Update cursor div position instantly (hardware accelerated transform)
+      if (cursor) {
+        cursor.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        cursor.style.opacity = 1;
+      }
+
       // Calculate distance moved to control density
       const dx = x - lastMousePos.x;
       const dy = y - lastMousePos.y;
@@ -111,6 +128,9 @@ export default function SparkleCursor() {
       if (!hasMoved) {
         lastMousePos = { x, y };
         hasMoved = true;
+        if (cursor) {
+          cursor.style.opacity = 1;
+        }
         return;
       }
 
@@ -128,13 +148,28 @@ export default function SparkleCursor() {
       }
     };
 
+    // Hide custom cursor when mouse leaves the document window
+    const handleMouseLeave = () => {
+      if (cursor) {
+        cursor.style.opacity = 0;
+      }
+    };
+
+    const handleMouseEnter = () => {
+      if (cursor) {
+        cursor.style.opacity = 1;
+      }
+    };
+
     window.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('mouseenter', handleMouseEnter);
 
     // Animation Loop
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      particles.forEach((p, idx) => {
+      particles.forEach((p) => {
         p.update();
         p.draw();
       });
@@ -149,21 +184,45 @@ export default function SparkleCursor() {
     return () => {
       window.removeEventListener('resize', resizeCanvas);
       window.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mouseenter', handleMouseEnter);
       cancelAnimationFrame(animationFrameId);
+      if (styleEl) styleEl.remove();
     };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 99999,
-        pointerEvents: 'none',
-      }}
-    />
+    <>
+      <div
+        ref={cursorRef}
+        style={{
+          position: 'fixed',
+          top: -2,  // Slight offset to align the hot spot precisely with the tip of the arrow
+          left: -2,
+          width: '28px', // A bit smaller size as requested
+          height: '28px',
+          backgroundImage: 'url(/custom-cursor.png)',
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          pointerEvents: 'none',
+          zIndex: 100000,
+          opacity: 0,
+          transform: 'translate3d(-100px, -100px, 0)',
+          transformOrigin: 'top left',
+          transition: 'opacity 0.15s ease',
+        }}
+      />
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 99999,
+          pointerEvents: 'none',
+        }}
+      />
+    </>
   );
 }
