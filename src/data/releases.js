@@ -19,7 +19,12 @@ export const SCHEDULED_RELEASES = [
       'Add daily check-in checklist panel with streak tracking and shift diagnostic report submission',
       'Implement floating Staff Access bypass button on Maintenance mode page',
       'Add collapsible help banner with live status tickers and self-help guide on Login page',
-      'Deploy custom sci-fi metallic neon cursor with default browser cursor override and synchronized particle trails'
+      'Deploy custom sci-fi metallic neon cursor with default browser cursor override and synchronized particle trails',
+      'Unify Live Banner and OBS Studio controls to enable real-time bidirectional synchronization',
+      'Fix YouTube livestream URL parsing to support raw 11-char IDs and standard watch links',
+      'Implement a dedicated Announcements management drawer inside the Founder Admin Panel',
+      'Deploy user Block/Ban toggle logic that terminates active sessions and blocks rogue login attempts',
+      'Integrate cross-tab event hooks to update maintenance state and live views instantly'
     ]
   },
   {
